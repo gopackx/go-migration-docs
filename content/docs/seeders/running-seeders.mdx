@@ -1,0 +1,204 @@
+---
+title: Running Seeders
+description: Learn how to register and run seeders using runner.RunAll() and runner.Run() methods.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+# Running Seeders
+
+Once you've defined your seeders, use the seeder runner to register and execute them.
+
+## Auto-Registration with `init()`
+
+Similar to migrations, seeders can be auto-registered from `init()` functions using `seeder.AutoRegister()`. This is the recommended approach when using `migrator.Run()`.
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+
+    "github.com/gopackx/go-migration/seeder"
+)
+
+func init() {
+    seeder.AutoRegister("UserSeeder", &UserSeeder{})
+}
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO users (name, email) VALUES ($1, $2)",
+        "Alice", "alice@example.com",
+    )
+    return err
+}
+```
+
+When using `migrator.Run()`, auto-registered seeders are discovered automatically — no manual registration needed. Just blank-import the seeders package in your `main.go`:
+
+```go title="main.go"
+package main
+
+import (
+    "github.com/gopackx/go-migration/migrator"
+    _ "your-project/migrations"
+    _ "your-project/seeders" // triggers init() auto-registration
+)
+
+func main() {
+    migrator.Run()
+}
+```
+
+<Callout type="info">
+  `seeder.AutoRegister()` panics on duplicate names, just like `migrator.AutoRegister()`. This ensures configuration mistakes are caught at startup.
+</Callout>
+
+## Manual Registration
+
+For more control, you can register seeders manually with the runner:
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/seeder"
+    "your-project/seeders"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    runner := seeder.NewRunner(db)
+
+    runner.Register("UserSeeder", &seeders.UserSeeder{})
+    runner.Register("PostSeeder", &seeders.PostSeeder{})
+    runner.Register("RoleSeeder", &seeders.RoleSeeder{})
+
+    // Run all seeders
+    if err := runner.RunAll(); err != nil {
+        log.Fatal(err)
+    }
+
+    log.Println("All seeders completed successfully!")
+}
+```
+
+## Running All Seeders
+
+`runner.RunAll()` executes every registered seeder:
+
+```go
+if err := runner.RunAll(); err != nil {
+    log.Fatal(err)
+}
+```
+
+<Steps>
+
+<Step>
+
+### Registration Order
+
+Seeders run in the order they were registered, unless [dependencies](/docs/seeders/dependencies) override the order.
+
+</Step>
+
+<Step>
+
+### Sequential Execution
+
+Each seeder's `Run` method is called one at a time. If a seeder returns an error, execution stops immediately.
+
+</Step>
+
+<Step>
+
+### Error Handling
+
+`RunAll()` returns the first error encountered. Seeders that completed before the failure remain applied.
+
+</Step>
+
+</Steps>
+
+## Running a Specific Seeder
+
+Use `runner.Run("SeederName")` to execute a single seeder by its registered name:
+
+```go
+// Run only the UserSeeder
+if err := runner.Run("UserSeeder"); err != nil {
+    log.Fatal(err)
+}
+```
+
+This is useful when you need to re-seed a specific table without running all seeders again.
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+    "os"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/seeder"
+    "your-project/seeders"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    runner := seeder.NewRunner(db)
+
+    runner.Register("UserSeeder", &seeders.UserSeeder{})
+    runner.Register("RoleSeeder", &seeders.RoleSeeder{})
+    runner.Register("PostSeeder", &seeders.PostSeeder{})
+
+    // Check if a specific seeder was requested
+    if len(os.Args) > 1 {
+        name := os.Args[1]
+        log.Printf("Running seeder: %s", name)
+        if err := runner.Run(name); err != nil {
+            log.Fatal(err)
+        }
+    } else {
+        log.Println("Running all seeders...")
+        if err := runner.RunAll(); err != nil {
+            log.Fatal(err)
+        }
+    }
+
+    log.Println("Seeding complete!")
+}
+```
+
+<Callout type="info">
+  The name passed to `runner.Run()` must match the name used in `runner.Register()` exactly. If the name doesn't match any registered seeder, an error is returned.
+</Callout>
+
+## What's Next?
+
+- [Dependencies](/docs/seeders/dependencies) — control the execution order of seeders with dependency declarations

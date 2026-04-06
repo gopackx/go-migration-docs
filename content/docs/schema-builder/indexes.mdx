@@ -1,0 +1,178 @@
+---
+title: Indexes
+description: Add single-column, composite, and unique indexes to your tables for better query performance.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Indexes
+
+Indexes improve query performance by allowing the database to find rows faster. The Schema Builder provides methods for creating single-column, composite, and unique indexes.
+
+## Single-Column Index
+
+Create an index on a single column using `bp.Index()`:
+
+```go
+bp.Index("idx_users_email", "email")
+```
+
+The first argument is the index name, and the second is the column to index.
+
+## Composite Index
+
+Index multiple columns together by passing additional column names:
+
+```go
+bp.Index("idx_posts_user_status", "user_id", "status")
+```
+
+Composite indexes are useful for queries that filter or sort on multiple columns simultaneously.
+
+## Unique Index
+
+Create a unique index that enforces uniqueness across one or more columns:
+
+```go
+bp.UniqueIndex("idx_users_email_unique", "email")
+```
+
+For composite unique indexes:
+
+```go
+bp.UniqueIndex("idx_subscriptions_user_plan", "user_id", "plan_id")
+```
+
+This ensures no two rows can have the same combination of `user_id` and `plan_id`.
+
+<Callout type="info">
+  The `.Unique()` column modifier adds a unique constraint on a single column. Use `bp.UniqueIndex()` when you need a composite unique constraint across multiple columns.
+</Callout>
+
+## Index Naming Conventions
+
+Choose descriptive index names that indicate the table and columns:
+
+| Pattern | Example |
+|---------|---------|
+| `idx_{table}_{column}` | `idx_users_email` |
+| `idx_{table}_{col1}_{col2}` | `idx_posts_user_id_status` |
+| `idx_{table}_{column}_unique` | `idx_users_email_unique` |
+
+## Complete Example
+
+```go title="migrations/20240401_create_articles_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type CreateArticlesTable struct{}
+
+func (m *CreateArticlesTable) Up(s *schema.Builder) {
+    s.Create("articles", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.BigInteger("author_id").Unsigned()
+        bp.BigInteger("category_id").Unsigned()
+        bp.String("title", 255)
+        bp.String("slug", 255)
+        bp.Text("content")
+        bp.String("status", 20).Default("draft")
+        bp.Timestamp("published_at").Nullable()
+        bp.Timestamp("created_at").Nullable()
+        bp.Timestamp("updated_at").Nullable()
+
+        // Single-column index
+        bp.Index("idx_articles_author_id", "author_id")
+
+        // Composite index for filtering by author and status
+        bp.Index("idx_articles_author_status", "author_id", "status")
+
+        // Unique index on slug
+        bp.UniqueIndex("idx_articles_slug_unique", "slug")
+
+        // Composite unique index
+        bp.UniqueIndex("idx_articles_author_title", "author_id", "title")
+    })
+}
+
+func (m *CreateArticlesTable) Down(s *schema.Builder) {
+    s.DropIfExists("articles")
+}
+```
+
+## Adding Indexes to Existing Tables
+
+You can add indexes in an `Alter` call:
+
+```go
+s.Alter("users", func(bp *schema.Blueprint) {
+    bp.Index("idx_users_created_at", "created_at")
+})
+```
+
+## Fulltext Index
+
+Create a fulltext index for text search on one or more columns:
+
+```go
+bp.FulltextIndex("title", "body")
+```
+
+Pass the column names you want to include in the fulltext index. The generated SQL depends on the database grammar:
+
+| Database | Generated SQL |
+|----------|---------------|
+| PostgreSQL | `CREATE INDEX ... ON "table" USING GIN (to_tsvector('english', "col"))` |
+| MySQL | `FULLTEXT KEY ("title", "body")` (inline) or `CREATE FULLTEXT INDEX ...` (standalone) |
+| SQLite | Returns an error — not supported |
+
+```go title="migrations/20240501_create_articles_table.go"
+s.Create("articles", func(bp *schema.Blueprint) {
+    bp.ID("id")
+    bp.String("title", 255)
+    bp.Text("body")
+    bp.Timestamp("created_at").Nullable()
+
+    // Fulltext index for search
+    bp.FulltextIndex("title", "body")
+})
+```
+
+## Spatial Index
+
+Create a spatial index for geometry or geography columns:
+
+```go
+bp.SpatialIndex("location")
+```
+
+The generated SQL depends on the database grammar:
+
+| Database | Generated SQL |
+|----------|---------------|
+| PostgreSQL | `CREATE INDEX ... ON "table" USING GIST ("location")` |
+| MySQL | `SPATIAL KEY ("location")` (inline) or `CREATE SPATIAL INDEX ...` (standalone) |
+| SQLite | Returns an error — not supported |
+
+```go title="migrations/20240601_create_places_table.go"
+s.Create("places", func(bp *schema.Blueprint) {
+    bp.ID("id")
+    bp.String("name", 255)
+    bp.String("location", 255)
+    bp.Timestamp("created_at").Nullable()
+
+    // Spatial index for geographic queries
+    bp.SpatialIndex("location")
+})
+```
+
+<Callout type="warn">
+  SQLite does not support fulltext or spatial indexes. Calling `bp.FulltextIndex()` or `bp.SpatialIndex()` with the SQLite grammar will return an error. If you need to support SQLite alongside other databases, consider using conditional logic or separate migration files.
+</Callout>
+
+## What's Next?
+
+- [Foreign Keys](/docs/schema-builder/foreign-keys) — define relationships between tables
+- [Utility Operations](/docs/schema-builder/utility-operations) — drop, rename, and inspect tables

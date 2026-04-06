@@ -1,0 +1,81 @@
+---
+title: Creating Tables
+description: Learn how to create database tables using the Schema Builder's s.Create() method with Blueprint callbacks.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Creating Tables
+
+The Schema Builder's `Create` method defines a new table in your database. You pass a table name and a callback that receives a `*schema.Blueprint` — the fluent API for adding columns, indexes, and constraints.
+
+## Basic Usage
+
+```go
+s.Create("users", func(bp *schema.Blueprint) {
+    bp.ID("id")
+    bp.String("name", 255)
+    bp.Timestamp("created_at").Nullable()
+})
+```
+
+The first argument is the table name. The callback receives a Blueprint where you define columns using chainable methods.
+
+## Complete Example
+
+Here's a full migration that creates a `posts` table with multiple column types, modifiers, an index, and a foreign key:
+
+```go title="migrations/20240115_create_posts_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type CreatePostsTable struct{}
+
+func (m *CreatePostsTable) Up(s *schema.Builder) {
+    s.Create("posts", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.BigInteger("user_id").Unsigned()
+        bp.String("title", 255)
+        bp.Text("body")
+        bp.String("slug", 255).Unique()
+        bp.Boolean("published").Default(false)
+        bp.Integer("view_count").Default(0).Unsigned()
+        bp.Decimal("rating", 3, 2).Nullable()
+        bp.JSON("metadata").Nullable()
+        bp.Timestamp("published_at").Nullable()
+        bp.Timestamp("created_at").Nullable()
+        bp.Timestamp("updated_at").Nullable()
+
+        // Add an index for faster lookups
+        bp.Index("idx_posts_user_id", "user_id")
+
+        // Add a foreign key constraint
+        bp.Foreign("user_id").References("id").On("users").OnDelete("CASCADE")
+    })
+}
+
+func (m *CreatePostsTable) Down(s *schema.Builder) {
+    s.DropIfExists("posts")
+}
+```
+
+## How It Works
+
+When you call `s.Create()`:
+
+1. The Blueprint callback is executed to collect all column definitions, indexes, and constraints
+2. The active database grammar translates the Blueprint into a `CREATE TABLE` SQL statement
+3. The SQL is executed against the database connection
+
+<Callout type="info">
+  The `Down` method should reverse the `Up` method. For table creation, this typically means calling `s.DropIfExists()` to remove the table.
+</Callout>
+
+## What's Next?
+
+- [Altering Tables](/docs/schema-builder/altering-tables) — modify existing tables
+- [Column Types](/docs/schema-builder/column-types) — full reference of available column types
+- [Column Modifiers](/docs/schema-builder/column-modifiers) — Nullable, Default, Unique, and more

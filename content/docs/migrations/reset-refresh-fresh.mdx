@@ -1,0 +1,113 @@
+---
+title: Reset, Refresh & Fresh
+description: Roll back all migrations, re-run them, or start from a clean slate with Reset, Refresh, and Fresh.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Reset, Refresh & Fresh
+
+go-migration provides three methods for bulk migration operations beyond simple rollback.
+
+## `m.Reset()`
+
+Rolls back **all** executed migrations in reverse order by calling each migration's `Down` method.
+
+```go
+// Roll back every migration
+if err := m.Reset(); err != nil {
+    log.Fatal(err)
+}
+```
+
+After `Reset()`, your database has no application tables — only the migrations tracking table remains empty.
+
+<Callout type="warn">
+  `Reset()` is destructive. All data in migrated tables will be lost. Use with caution in production.
+</Callout>
+
+## `m.Refresh()`
+
+Rolls back all migrations and then re-runs them. This is equivalent to calling `m.Reset()` followed by `m.Up()`.
+
+```go
+// Roll back all, then re-run all
+if err := m.Refresh(); err != nil {
+    log.Fatal(err)
+}
+```
+
+`Refresh()` is useful when you want to rebuild your database schema from scratch while keeping the migration history clean. It executes every `Down` method in reverse, then every `Up` method in order.
+
+### When to Use Refresh
+
+- Rebuilding a development database after changing migration logic
+- Resetting test databases between test suites
+- Verifying that all `Down` methods work correctly
+
+## `m.Fresh()`
+
+Drops **all tables** in the database and then runs all migrations from scratch. Unlike `Refresh()`, it does not call `Down` methods — it simply drops everything.
+
+```go
+// Drop all tables, then run all migrations
+if err := m.Fresh(); err != nil {
+    log.Fatal(err)
+}
+```
+
+<Callout type="error">
+  `Fresh()` drops every table in the database, including the migrations tracking table. This is the most destructive operation available. Never use it on a production database.
+</Callout>
+
+### Fresh vs Refresh
+
+| | `Refresh()` | `Fresh()` |
+|---|---|---|
+| Calls `Down` methods | Yes | No |
+| Drops all tables | No (only what `Down` reverses) | Yes (everything) |
+| Requires working `Down` methods | Yes | No |
+| Use case | Rebuild with rollback verification | Clean slate, ignore `Down` logic |
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    "your-project/migrations"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db)
+
+    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+
+    // Option 1: Roll back everything
+    m.Reset()
+
+    // Option 2: Roll back everything, then re-run
+    m.Refresh()
+
+    // Option 3: Drop all tables, then run from scratch
+    m.Fresh()
+}
+```
+
+## What's Next?
+
+- [Migration Status](/docs/migrations/migration-status) — check the current state of your migrations
+- [Rollback](/docs/migrations/rollback) — targeted rollback by batch or step count

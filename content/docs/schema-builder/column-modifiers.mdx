@@ -1,0 +1,151 @@
+---
+title: Column Modifiers
+description: Customize columns with chainable modifiers like Nullable, Default, Primary, Unique, Unsigned, and AutoIncrement.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Column Modifiers
+
+Column modifiers let you customize column behavior. They're chainable — call them directly on the column definition returned by any [column type](/docs/schema-builder/column-types) method.
+
+```go
+bp.String("email", 255).Unique()
+bp.Integer("age").Nullable().Default(0)
+bp.BigInteger("count").Unsigned().Default(0)
+```
+
+## Available Modifiers
+
+| Modifier | Description | Example |
+|----------|-------------|---------|
+| `.Nullable()` | Allow NULL values | `bp.String("phone", 20).Nullable()` |
+| `.Default(value)` | Set a default value | `bp.Boolean("active").Default(true)` |
+| `.Primary()` | Set as primary key | `bp.UUID("id").Primary()` |
+| `.Unique()` | Add a unique constraint | `bp.String("email", 255).Unique()` |
+| `.Unsigned()` | Make numeric column unsigned | `bp.Integer("age").Unsigned()` |
+| `.AutoIncrement()` | Enable auto-increment | `bp.BigInteger("id").AutoIncrement().Primary()` |
+
+## Nullable
+
+By default, columns are `NOT NULL`. Use `.Nullable()` to allow NULL values:
+
+```go
+bp.String("phone", 20).Nullable()
+bp.Text("bio").Nullable()
+bp.Timestamp("deleted_at").Nullable()
+```
+
+This is common for optional fields and soft-delete timestamps.
+
+## Default
+
+Set a default value that the database uses when no value is provided during insert:
+
+```go
+bp.Boolean("active").Default(true)
+bp.Integer("view_count").Default(0)
+bp.String("role", 50).Default("user")
+bp.JSON("settings").Default("{}")
+```
+
+<Callout type="info">
+  The default value is set at the database level, not in Go code. The database engine applies it when a row is inserted without specifying that column.
+</Callout>
+
+## Primary
+
+Designate a column as the primary key:
+
+```go
+bp.UUID("id").Primary()
+```
+
+For auto-incrementing integer primary keys, use `bp.ID()` instead — it combines `BigInteger`, `Unsigned`, `AutoIncrement`, and `Primary` in one call:
+
+```go
+bp.ID("id")
+```
+
+## Unique
+
+Add a unique constraint to ensure no duplicate values:
+
+```go
+bp.String("email", 255).Unique()
+bp.String("slug", 255).Unique()
+bp.UUID("external_id").Unique()
+```
+
+For composite unique constraints, use a [unique index](/docs/schema-builder/indexes) instead.
+
+## Unsigned
+
+Restrict numeric columns to non-negative values:
+
+```go
+bp.Integer("age").Unsigned()
+bp.BigInteger("file_size").Unsigned()
+```
+
+<Callout type="warn">
+  Not all databases support unsigned integers natively. PostgreSQL, for example, doesn't have unsigned types — the grammar handles this by using check constraints or ignoring the modifier depending on the implementation. See [Database Grammars](/docs/database-grammars) for details.
+</Callout>
+
+## AutoIncrement
+
+Enable auto-incrementing for integer columns:
+
+```go
+bp.BigInteger("id").AutoIncrement().Primary()
+```
+
+In most cases, you should use `bp.ID()` which sets up auto-increment automatically. Use `.AutoIncrement()` directly only when you need custom control over the primary key definition.
+
+## Chaining Multiple Modifiers
+
+Modifiers can be chained in any order:
+
+```go
+bp.Integer("sort_order").Unsigned().Default(0)
+bp.String("status", 20).Default("draft")
+bp.Decimal("balance", 12, 2).Unsigned().Default(0)
+bp.BigInteger("parent_id").Unsigned().Nullable()
+```
+
+## Complete Example
+
+```go title="migrations/20240301_create_orders_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type CreateOrdersTable struct{}
+
+func (m *CreateOrdersTable) Up(s *schema.Builder) {
+    s.Create("orders", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.BigInteger("user_id").Unsigned()
+        bp.String("order_number", 50).Unique()
+        bp.String("status", 20).Default("pending")
+        bp.Decimal("total", 12, 2).Unsigned().Default(0)
+        bp.Decimal("tax", 10, 2).Unsigned().Default(0)
+        bp.Text("notes").Nullable()
+        bp.Boolean("paid").Default(false)
+        bp.Timestamp("shipped_at").Nullable()
+        bp.Timestamp("created_at").Nullable()
+        bp.Timestamp("updated_at").Nullable()
+    })
+}
+
+func (m *CreateOrdersTable) Down(s *schema.Builder) {
+    s.DropIfExists("orders")
+}
+```
+
+## What's Next?
+
+- [Indexes](/docs/schema-builder/indexes) — add indexes for query performance
+- [Foreign Keys](/docs/schema-builder/foreign-keys) — define relationships between tables

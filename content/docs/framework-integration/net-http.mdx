@@ -1,0 +1,137 @@
+---
+title: net/http
+description: Integrate go-migration with Go's standard net/http package using only *sql.DB.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+# net/http Integration
+
+go-migration works with Go's standard library `net/http` package with zero extra dependencies. Since go-migration depends only on `*sql.DB`, no adapters or third-party glue code is needed.
+
+<Callout type="info">
+  go-migration is framework-agnostic. It only needs a `*sql.DB` connection — no external web framework required.
+</Callout>
+
+## Complete Example
+
+This example shows a `net/http` server that runs migrations on startup and exposes a health-check endpoint.
+
+<Steps>
+
+<Step>
+
+### Define a Migration
+
+```go title="migrations/20240101_create_orders_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type CreateOrdersTable struct{}
+
+func (m *CreateOrdersTable) Up(s *schema.Builder) {
+    s.Create("orders", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.BigInteger("user_id").Unsigned()
+        bp.Decimal("total", 12, 2)
+        bp.String("status", 50).Default("pending")
+        bp.Timestamp("created_at").Nullable()
+        bp.Timestamp("updated_at").Nullable()
+    })
+}
+
+func (m *CreateOrdersTable) Down(s *schema.Builder) {
+    s.DropIfExists("orders")
+}
+```
+
+</Step>
+
+<Step>
+
+### Set Up the Database and Migrator
+
+Open a `*sql.DB` connection, create the migrator, register migrations, and run them before starting the HTTP server.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "encoding/json"
+    "log"
+    "net/http"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    "your-project/migrations"
+)
+
+func main() {
+    // 1. Open a database connection
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    // 2. Create the migrator
+    m := migrator.New(db)
+
+    // 3. Register migrations
+    m.Register("20240101_create_orders_table", &migrations.CreateOrdersTable{})
+
+    // 4. Run pending migrations
+    if err := m.Up(); err != nil {
+        log.Fatal("migration failed: ", err)
+    }
+    log.Println("Migrations completed")
+
+    // 5. Set up HTTP handlers
+    mux := http.NewServeMux()
+
+    mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        status := map[string]string{"status": "healthy"}
+        if err := db.Ping(); err != nil {
+            w.WriteHeader(http.StatusInternalServerError)
+            status["status"] = "unhealthy"
+        }
+        json.NewEncoder(w).Encode(status)
+    })
+
+    log.Println("Server listening on :8080")
+    log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+</Step>
+
+<Step>
+
+### Run the Application
+
+```bash
+go run main.go
+```
+
+The server starts on port 8080 with all migrations applied. The `/health` endpoint confirms the database connection is active.
+
+</Step>
+
+</Steps>
+
+## Key Takeaway
+
+go-migration doesn't require any web framework at all. It receives a `*sql.DB`, runs migrations, and returns. Whether you use `net/http`, Gin, Echo, Fiber, or any other framework, the integration pattern is identical — open a connection, create a migrator, and call `m.Up()`.
+
+## What's Next?
+
+- [Gin Integration](/docs/framework-integration/gin) — same pattern with Gin
+- [Defining Migrations](/docs/migrations/defining-migrations) — learn more about migration structs
+- [Schema Builder](/docs/schema-builder/creating-tables) — full table and column API

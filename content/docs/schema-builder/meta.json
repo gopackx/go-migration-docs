@@ -1,0 +1,12 @@
+{
+  "title": "Schema Builder",
+  "pages": [
+    "creating-tables",
+    "altering-tables",
+    "column-types",
+    "column-modifiers",
+    "indexes",
+    "foreign-keys",
+    "utility-operations"
+  ]
+}

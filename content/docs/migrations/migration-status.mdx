@@ -1,0 +1,108 @@
+---
+title: Migration Status
+description: Check which migrations have run and their batch numbers using m.Status().
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Migration Status
+
+Use `m.Status()` to inspect the current state of all registered migrations — which ones have run, their batch numbers, and which are still pending.
+
+## Using `m.Status()`
+
+```go
+statuses, err := m.Status()
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, s := range statuses {
+    fmt.Printf("Migration: %s | Ran: %v | Batch: %d\n", s.Name, s.Ran, s.Batch)
+}
+```
+
+`m.Status()` returns a slice of status entries, one for each registered migration.
+
+## Status Output
+
+Each status entry contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Name` | `string` | The migration name as passed to `m.Register()` |
+| `Ran` | `bool` | Whether the migration has been executed |
+| `Batch` | `int` | The batch number (0 if not yet run) |
+
+### Example Output
+
+Given these registered migrations:
+
+```go
+m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+m.Register("20240201_add_phone_to_users", &migrations.AddPhoneToUsers{})
+```
+
+If the first two have been executed, `m.Status()` produces:
+
+```
+Migration: 20240101_create_users_table   | Ran: true  | Batch: 1
+Migration: 20240115_create_posts_table   | Ran: true  | Batch: 1
+Migration: 20240201_add_phone_to_users   | Ran: false | Batch: 0
+```
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "fmt"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    "your-project/migrations"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db)
+
+    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+    m.Register("20240201_add_phone_to_users", &migrations.AddPhoneToUsers{})
+
+    statuses, err := m.Status()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Println("Migration Status:")
+    fmt.Println("─────────────────────────────────────────────────────")
+    for _, s := range statuses {
+        status := "Pending"
+        if s.Ran {
+            status = fmt.Sprintf("Ran (Batch %d)", s.Batch)
+        }
+        fmt.Printf("  %s — %s\n", s.Name, status)
+    }
+}
+```
+
+<Callout type="info">
+  `m.Status()` only reports on migrations that are registered with the migrator. If a migration was previously run but is no longer registered, it won't appear in the status output.
+</Callout>
+
+## What's Next?
+
+- [Running Migrations](/docs/migrations/running-migrations) — execute pending migrations
+- [Rollback](/docs/migrations/rollback) — undo migrations when needed

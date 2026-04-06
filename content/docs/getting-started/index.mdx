@@ -1,0 +1,71 @@
+---
+title: Introduction
+description: Learn what go-migration is, its key features, and supported databases.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Introduction
+
+**go-migration** is a Laravel-inspired database migration and seeding system for Go. It gives you a fluent, expressive API for managing database schema changes, seeding data, and handling multiple database connections — all from your Go application or the command line.
+
+If you've used Laravel's migration system, you'll feel right at home. If you haven't, go-migration provides a clean, struct-based approach to database management that keeps your schema changes versioned, repeatable, and reviewable.
+
+## Key Features
+
+### Struct-Based Migrations
+
+Define migrations as Go structs with `Up` and `Down` methods. Each migration is a self-contained unit that can create, alter, or drop database objects. No raw SQL strings scattered across your codebase.
+
+```go
+type CreateUsersTable struct{}
+
+func (m *CreateUsersTable) Up(s *schema.Builder) {
+    s.Create("users", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.String("name", 255)
+        bp.String("email", 255).Unique()
+        bp.Timestamp("created_at").Nullable()
+    })
+}
+
+func (m *CreateUsersTable) Down(s *schema.Builder) {
+    s.DropIfExists("users")
+}
+```
+
+### Fluent Schema Builder
+
+Build tables, columns, indexes, and foreign keys using a chainable API. Column modifiers like `Nullable()`, `Default()`, and `Unique()` read naturally and keep your schema definitions clean.
+
+### Seeders and Factories
+
+Populate your database with test or default data using seeders. Use the generic `Factory[T]` pattern with a built-in faker to generate realistic test data at scale.
+
+### CLI Commands
+
+Run migrations, rollbacks, resets, and seeding operations from the command line. Generate migration and seeder scaffolds with `make:migration` and `make:seeder`.
+
+### Multi-Database Support
+
+go-migration works with **PostgreSQL**, **MySQL**, and **SQLite** out of the box. Switch between databases by selecting the appropriate grammar — your migration code stays the same.
+
+### Framework-Agnostic
+
+go-migration depends only on `*sql.DB` from the standard library. Use it with Gin, Echo, Fiber, net/http, or any other Go framework without adapters or plugins.
+
+## Supported Databases
+
+| Database   | Driver Package         | Grammar                |
+| ---------- | ---------------------- | ---------------------- |
+| PostgreSQL | `github.com/lib/pq`   | `grammar.PostgreSQL()` |
+| MySQL      | `github.com/go-sql-driver/mysql` | `grammar.MySQL()` |
+| SQLite     | `github.com/mattn/go-sqlite3`    | `grammar.SQLite()` |
+
+<Callout type="info">
+  go-migration generates database-specific SQL through its grammar system. You write your migrations once and they work across all supported databases.
+</Callout>
+
+## What's Next?
+
+Ready to get started? Head to the [Installation](/docs/getting-started/installation) page to add go-migration to your project, then follow the [Quick Start](/docs/getting-started/quick-start) guide to run your first migration.

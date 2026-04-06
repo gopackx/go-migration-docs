@@ -1,0 +1,154 @@
+---
+title: Hooks
+description: Execute custom logic before and after migrations using BeforeMigrate and AfterMigrate hooks in go-migration.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Hooks
+
+go-migration lets you register **hooks** that run custom logic before and after migration execution. Hooks are useful for logging, sending notifications, clearing caches, or validating preconditions.
+
+Two hooks are available:
+
+- `m.BeforeMigrate()` — runs before any migration is applied
+- `m.AfterMigrate()` — runs after all migrations have been applied
+
+## BeforeMigrate
+
+Register a function that runs **before** migrations execute. The callback receives no arguments and returns an `error`.
+
+```go title="main.go"
+m.BeforeMigrate(func() error {
+    log.Println("Starting migration...")
+    return nil
+})
+```
+
+If the `BeforeMigrate` hook returns an error, the migration is **aborted** and no changes are applied to the database.
+
+```go title="main.go"
+m.BeforeMigrate(func() error {
+    if !isMaintenanceWindow() {
+        return fmt.Errorf("migrations are only allowed during maintenance windows")
+    }
+    return nil
+})
+```
+
+<Callout type="warn">
+  A `BeforeMigrate` hook error stops the entire migration process. Use this to enforce preconditions that must be met before any schema changes are made.
+</Callout>
+
+## AfterMigrate
+
+Register a function that runs **after** migrations complete successfully. Like `BeforeMigrate`, the callback returns an `error`.
+
+```go title="main.go"
+m.AfterMigrate(func() error {
+    log.Println("Migrations completed successfully!")
+    return nil
+})
+```
+
+If the `AfterMigrate` hook returns an error, the error is **logged** but does **not** roll back the migrations. The schema changes remain applied.
+
+```go title="main.go"
+m.AfterMigrate(func() error {
+    err := notifySlack("Migrations applied to production")
+    if err != nil {
+        return fmt.Errorf("failed to send Slack notification: %w", err)
+    }
+    return nil
+})
+```
+
+<Callout type="info">
+  `AfterMigrate` hook errors are logged without rolling back. This is by design — migrations have already been applied and committed, so the hook failure is treated as a non-critical side effect.
+</Callout>
+
+## Error Behavior Summary
+
+| Hook | On Error | Migrations |
+|------|----------|------------|
+| `BeforeMigrate` | Aborts | Not executed |
+| `AfterMigrate` | Logged only | Already applied, not rolled back |
+
+## Complete Example
+
+Here's a full example using both hooks for logging and notifications:
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "fmt"
+    "log"
+    "time"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db)
+
+    // Log migration start time and validate preconditions
+    m.BeforeMigrate(func() error {
+        log.Printf("Migration started at %s", time.Now().Format(time.RFC3339))
+
+        // Example: check a precondition before allowing migrations
+        if err := db.Ping(); err != nil {
+            return fmt.Errorf("database is not reachable: %w", err)
+        }
+
+        return nil
+    })
+
+    // Log completion and send a notification
+    m.AfterMigrate(func() error {
+        log.Printf("Migration completed at %s", time.Now().Format(time.RFC3339))
+
+        // Example: send a notification (failure won't roll back migrations)
+        if err := sendNotification("Migrations applied successfully"); err != nil {
+            return fmt.Errorf("notification failed: %w", err)
+        }
+
+        return nil
+    })
+
+    // Register migrations...
+    // m.Register("20240101_000001_create_users_table", &CreateUsersTable{})
+
+    if err := m.Up(); err != nil {
+        log.Fatal(err)
+    }
+}
+
+func sendNotification(message string) error {
+    // Your notification logic (Slack, email, webhook, etc.)
+    log.Println(message)
+    return nil
+}
+```
+
+## Use Cases
+
+- **Logging** — record when migrations start and finish for audit trails
+- **Notifications** — send Slack or email alerts when migrations run in production
+- **Precondition checks** — verify the database is reachable or that a maintenance window is active before applying changes
+- **Cache invalidation** — clear application caches after schema changes
+
+## What's Next?
+
+- [CLI Reference](/docs/cli) — run migrations from the command line
+- [Configuration](/docs/configuration) — configure go-migration with YAML, JSON, or environment variables
+- [Error Handling](/docs/error-handling) — handle and diagnose migration errors

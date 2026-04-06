@@ -1,0 +1,353 @@
+---
+title: Batch Insert
+description: Insert large amounts of seed data efficiently using CreateMany and CreateManyWithDialect with multi-database support.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Batch Insert
+
+When seeding large datasets, inserting rows one at a time can be slow. The `CreateMany` and `CreateManyWithDialect` helpers insert records in batches using multi-row `INSERT` statements for much better performance.
+
+## Multi-Dialect Support
+
+`CreateMany` now generates database-specific SQL with correct placeholder syntax and identifier quoting for each database engine. Previously, placeholders were hardcoded to MySQL-style `?`, which could cause errors on PostgreSQL with special characters in values.
+
+| Dialect | Placeholders | Identifier Quoting | Example |
+|---------|-------------|-------------------|---------|
+| `seeder.DialectPostgres` | `$1, $2, $3` | `"double quotes"` | `INSERT INTO "users" ("name") VALUES ($1)` |
+| `seeder.DialectMySQL` | `?, ?, ?` | `` `backticks` `` | `` INSERT INTO `users` (`name`) VALUES (?) `` |
+| `seeder.DialectSQLite` | `?, ?, ?` | `"double quotes"` | `INSERT INTO "users" ("name") VALUES (?)` |
+
+## The `CreateMany` Function
+
+The default function uses `DialectPostgres`. Existing code continues to work without changes.
+
+```go
+func CreateMany(db *sql.DB, table string, records []map[string]any, chunkSize int) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `db` | `*sql.DB` | The database connection |
+| `table` | `string` | Target table name |
+| `records` | `[]map[string]any` | Slice of records to insert (each map is a row) |
+| `chunkSize` | `int` | Number of rows per batch. Defaults to 500 if `<= 0` |
+
+**Returns:** `error` — returns `nil` on success, or an error with the batch index range on failure.
+
+## The `CreateManyWithDialect` Function
+
+Use this when you need to target a specific database dialect.
+
+```go
+func CreateManyWithDialect(db *sql.DB, table string, records []map[string]any, chunkSize int, dialect Dialect) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `db` | `*sql.DB` | The database connection |
+| `table` | `string` | Target table name |
+| `records` | `[]map[string]any` | Slice of records to insert (each map is a row) |
+| `chunkSize` | `int` | Number of rows per batch. Defaults to 500 if `<= 0` |
+| `dialect` | `Dialect` | Database dialect (`DialectPostgres`, `DialectMySQL`, or `DialectSQLite`) |
+
+**Returns:** `error`
+
+## Basic Usage
+
+<Tabs items={["PostgreSQL (default)", "MySQL", "SQLite"]}>
+<Tab value="PostgreSQL (default)">
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+
+    "github.com/gopackx/go-migration/seeder"
+)
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    records := []map[string]any{
+        {"name": "Alice", "email": "alice@example.com", "role": "admin"},
+        {"name": "Bob", "email": "bob@example.com", "role": "editor"},
+        {"name": "Charlie", "email": "charlie@example.com", "role": "viewer"},
+    }
+
+    // Default — uses DialectPostgres ($1, $2 placeholders)
+    return seeder.CreateMany(db, "users", records, 100)
+}
+```
+
+</Tab>
+<Tab value="MySQL">
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+
+    "github.com/gopackx/go-migration/seeder"
+)
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    records := []map[string]any{
+        {"name": "Alice", "email": "alice@example.com", "role": "admin"},
+        {"name": "Bob", "email": "bob@example.com", "role": "editor"},
+        {"name": "Charlie", "email": "charlie@example.com", "role": "viewer"},
+    }
+
+    // MySQL — uses ?, ? placeholders and `backtick` identifiers
+    return seeder.CreateManyWithDialect(db, "users", records, 100, seeder.DialectMySQL)
+}
+```
+
+</Tab>
+<Tab value="SQLite">
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+
+    "github.com/gopackx/go-migration/seeder"
+)
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    records := []map[string]any{
+        {"name": "Alice", "email": "alice@example.com", "role": "admin"},
+        {"name": "Bob", "email": "bob@example.com", "role": "editor"},
+        {"name": "Charlie", "email": "charlie@example.com", "role": "viewer"},
+    }
+
+    // SQLite — uses ?, ? placeholders and "double quote" identifiers
+    return seeder.CreateManyWithDialect(db, "users", records, 100, seeder.DialectSQLite)
+}
+```
+
+</Tab>
+</Tabs>
+
+## The Dialect Type
+
+```go
+type Dialect int
+
+const (
+    DialectPostgres Dialect = iota
+    DialectMySQL
+    DialectSQLite
+)
+```
+
+Each dialect has two helper methods used internally:
+
+| Method | Description |
+|--------|-------------|
+| `dialect.placeholder(index int)` | Returns the placeholder for the given parameter index |
+| `dialect.quoteIdent(name string)` | Quotes a table or column identifier for the dialect |
+
+## How It Works
+
+`CreateMany` splits the records into chunks of `chunkSize` rows and executes a multi-row `INSERT` for each chunk with dialect-appropriate SQL:
+
+<Tabs items={["PostgreSQL", "MySQL", "SQLite"]}>
+<Tab value="PostgreSQL">
+
+```sql
+-- Generated SQL (chunkSize=2, 3 records):
+INSERT INTO "users" ("name", "email", "role") VALUES ($1, $2, $3), ($4, $5, $6);
+INSERT INTO "users" ("name", "email", "role") VALUES ($7, $8, $9);
+```
+
+</Tab>
+<Tab value="MySQL">
+
+```sql
+-- Generated SQL (chunkSize=2, 3 records):
+INSERT INTO `users` (`name`, `email`, `role`) VALUES (?, ?, ?), (?, ?, ?);
+INSERT INTO `users` (`name`, `email`, `role`) VALUES (?, ?, ?);
+```
+
+</Tab>
+<Tab value="SQLite">
+
+```sql
+-- Generated SQL (chunkSize=2, 3 records):
+INSERT INTO "users" ("name", "email", "role") VALUES (?, ?, ?), (?, ?, ?);
+INSERT INTO "users" ("name", "email", "role") VALUES (?, ?, ?);
+```
+
+</Tab>
+</Tabs>
+
+This is significantly faster than individual `INSERT` statements, especially for thousands of rows.
+
+<Callout type="info">
+  **Backward compatible** — existing code using `CreateMany()` continues to work without changes. It defaults to `DialectPostgres` with `$1, $2` placeholders and `"double quote"` identifiers.
+</Callout>
+
+## Chunk Size
+
+The `chunkSize` parameter controls how many rows are included in each `INSERT` statement:
+
+- If `chunkSize <= 0`, it defaults to **500**
+- Choose a chunk size based on your database's limits and the number of columns per row
+- Larger chunks are faster but use more memory
+
+```go
+// Insert 10,000 records in batches of 1,000 (Postgres default)
+seeder.CreateMany(db, "products", records, 1000)
+
+// Same with explicit MySQL dialect
+seeder.CreateManyWithDialect(db, "products", records, 1000, seeder.DialectMySQL)
+
+// Use the default chunk size (500)
+seeder.CreateMany(db, "products", records, 0)
+```
+
+## Key Validation
+
+All records must have the same set of keys. `CreateMany` validates this before inserting — if any record has different keys than the first record, an error is returned.
+
+```go
+// This will return an error — inconsistent keys
+records := []map[string]any{
+    {"name": "Alice", "email": "alice@example.com"},
+    {"name": "Bob", "phone": "555-0123"}, // "phone" instead of "email"
+}
+
+err := seeder.CreateMany(db, "users", records, 100)
+// Error: record keys do not match
+```
+
+## Error Handling
+
+If a batch fails, the error includes the index range of the failing batch so you can identify which records caused the issue:
+
+```go
+err := seeder.CreateMany(db, "users", records, 100)
+if err != nil {
+    // Error message includes batch range, e.g.:
+    // "batch insert failed for rows 200-299: duplicate key value..."
+    log.Fatal(err)
+}
+```
+
+<Callout type="info">
+  `CreateMany` does not wrap all batches in a single transaction. Each batch is an independent `INSERT` statement. If you need all-or-nothing behavior, wrap the call in a transaction yourself.
+</Callout>
+
+## Complete Example
+
+<Tabs items={["PostgreSQL (default)", "MySQL", "SQLite"]}>
+<Tab value="PostgreSQL (default)">
+
+```go title="seeders/product_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+
+    "github.com/gopackx/go-migration/seeder"
+)
+
+type ProductSeeder struct{}
+
+func (s *ProductSeeder) Run(db *sql.DB) error {
+    var records []map[string]any
+
+    for i := 1; i <= 5000; i++ {
+        records = append(records, map[string]any{
+            "name":   fmt.Sprintf("Product %d", i),
+            "price":  float64(i) * 9.99,
+            "stock":  i * 10,
+            "active": true,
+        })
+    }
+
+    // Uses DialectPostgres by default
+    return seeder.CreateMany(db, "products", records, 500)
+}
+```
+
+</Tab>
+<Tab value="MySQL">
+
+```go title="seeders/product_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+
+    "github.com/gopackx/go-migration/seeder"
+)
+
+type ProductSeeder struct{}
+
+func (s *ProductSeeder) Run(db *sql.DB) error {
+    var records []map[string]any
+
+    for i := 1; i <= 5000; i++ {
+        records = append(records, map[string]any{
+            "name":   fmt.Sprintf("Product %d", i),
+            "price":  float64(i) * 9.99,
+            "stock":  i * 10,
+            "active": true,
+        })
+    }
+
+    return seeder.CreateManyWithDialect(db, "products", records, 500, seeder.DialectMySQL)
+}
+```
+
+</Tab>
+<Tab value="SQLite">
+
+```go title="seeders/product_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+
+    "github.com/gopackx/go-migration/seeder"
+)
+
+type ProductSeeder struct{}
+
+func (s *ProductSeeder) Run(db *sql.DB) error {
+    var records []map[string]any
+
+    for i := 1; i <= 5000; i++ {
+        records = append(records, map[string]any{
+            "name":   fmt.Sprintf("Product %d", i),
+            "price":  float64(i) * 9.99,
+            "stock":  i * 10,
+            "active": true,
+        })
+    }
+
+    return seeder.CreateManyWithDialect(db, "products", records, 500, seeder.DialectSQLite)
+}
+```
+
+</Tab>
+</Tabs>
+
+## What's Next?
+
+- [Seeder Tags](/docs/seeders/tags) — group seeders with tags and run them selectively
+- [Seeder Rollback](/docs/seeders/rollback) — undo seeded data with rollback support

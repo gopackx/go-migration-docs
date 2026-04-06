@@ -1,0 +1,115 @@
+---
+title: Installation
+description: Install go-migration in your Go project with go get.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+# Installation
+
+<Steps>
+
+<Step>
+
+### Check Go Version
+
+go-migration requires **Go 1.21** or later. Check your installed version:
+
+```bash
+go version
+```
+
+If you need to update, visit [go.dev/dl](https://go.dev/dl/) for the latest release.
+
+</Step>
+
+<Step>
+
+### Install go-migration
+
+Add go-migration to your project using `go get`:
+
+```bash
+go get github.com/gopackx/go-migration@v1.4.2
+```
+
+This installs the core package along with the schema builder, migrator, seeder, and factory modules.
+
+</Step>
+
+<Step>
+
+### Install a Database Driver
+
+Install the driver for your database:
+
+```bash
+# PostgreSQL
+go get github.com/lib/pq
+
+# MySQL
+go get github.com/go-sql-driver/mysql
+
+# SQLite
+go get github.com/mattn/go-sqlite3
+```
+
+</Step>
+
+</Steps>
+
+<Callout type="info">
+  go-migration depends only on `*sql.DB` from the Go standard library. It works with any database driver that implements the `database/sql` interface.
+</Callout>
+
+## CLI Installation
+
+To use the go-migration CLI tool for generating migrations, seeders, and factories from the terminal:
+
+```bash
+go install github.com/gopackx/go-migration/cmd/migrator@v1.4.2
+```
+
+Or use `@latest` to always get the most recent version:
+
+```bash
+go install github.com/gopackx/go-migration/cmd/migrator@latest
+```
+
+Verify the CLI is installed:
+
+```bash
+go-migration --help
+```
+
+<Callout type="info">
+  Once the CLI is installed, you can optionally run `go-migration init` to scaffold your project structure — it creates the recommended directories, a starter `cmd/migrator/main.go`, and a `migration.json` config file. See the [Quick Start](/docs/getting-started/quick-start) guide or the [CLI Reference](/docs/cli) for details.
+</Callout>
+
+## Verify Installation
+
+Create a simple Go file to verify everything is wired up:
+
+```go
+package main
+
+import (
+    "fmt"
+
+    "github.com/gopackx/go-migration/migrator"
+)
+
+func main() {
+    fmt.Println("go-migration installed successfully")
+    _ = migrator.New
+}
+```
+
+Run it:
+
+```bash
+go run main.go
+```
+
+If you see `go-migration installed successfully`, you're ready to go. Head to the [Quick Start](/docs/getting-started/quick-start) guide to create and run your first migration.

@@ -1,0 +1,193 @@
+---
+title: Column Types
+description: Reference table of all supported column types in the go-migration Schema Builder.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Column Types
+
+The Schema Builder provides methods on the `*schema.Blueprint` for every supported column type. Each method returns a column definition that you can further customize with [column modifiers](/docs/schema-builder/column-modifiers).
+
+## Type Reference
+
+| Method | Description | Parameters |
+|--------|-------------|------------|
+| `bp.ID(name)` | Auto-incrementing unsigned big integer primary key | `name string` |
+| `bp.String(name, length)` | Variable-length string (VARCHAR) | `name string, length int` |
+| `bp.Text(name)` | Unlimited-length text | `name string` |
+| `bp.Integer(name)` | 32-bit integer | `name string` |
+| `bp.BigInteger(name)` | 64-bit integer | `name string` |
+| `bp.Boolean(name)` | Boolean true/false | `name string` |
+| `bp.Timestamp(name)` | Timestamp with date and time | `name string` |
+| `bp.Date(name)` | Date without time | `name string` |
+| `bp.Decimal(name, precision, scale)` | Fixed-point decimal number | `name string, precision int, scale int` |
+| `bp.Float(name)` | Floating-point number | `name string` |
+| `bp.UUID(name)` | UUID string | `name string` |
+| `bp.JSON(name)` | JSON data | `name string` |
+| `bp.Binary(name)` | Binary/blob data | `name string` |
+| `bp.Enum(name, allowed)` | Enumerated type with allowed values | `name string, allowed []string` |
+| `bp.Char(name, length)` | Fixed-length character string | `name string, length int` |
+| `bp.LongText(name)` | Long text (MySQL: LONGTEXT, others: TEXT) | `name string` |
+| `bp.MediumText(name)` | Medium text (MySQL: MEDIUMTEXT, others: TEXT) | `name string` |
+| `bp.TinyInt(name)` | Tiny integer (MySQL: TINYINT, PG: SMALLINT, SQLite: INTEGER) | `name string` |
+| `bp.SmallInt(name)` | Small integer (MySQL/PG: SMALLINT, SQLite: INTEGER) | `name string` |
+
+## Usage Examples
+
+### Primary Key
+
+```go
+bp.ID("id")
+```
+
+`ID` creates an auto-incrementing unsigned big integer column and sets it as the primary key. This is the recommended way to define primary keys.
+
+### Strings
+
+```go
+bp.String("name", 255)
+bp.String("email", 255).Unique()
+bp.String("slug", 100).Unique()
+```
+
+The second argument sets the maximum character length (maps to `VARCHAR(n)` in SQL).
+
+### Text
+
+```go
+bp.Text("body")
+bp.Text("description").Nullable()
+```
+
+Use `Text` for long-form content where you don't need a length limit.
+
+### Numeric Types
+
+```go
+bp.Integer("age")
+bp.BigInteger("population").Unsigned()
+bp.Decimal("price", 10, 2)
+bp.Float("score")
+```
+
+`Decimal` takes precision (total digits) and scale (digits after the decimal point). For example, `Decimal("price", 10, 2)` stores values like `12345678.99`.
+
+### Boolean
+
+```go
+bp.Boolean("active").Default(true)
+bp.Boolean("verified").Default(false)
+```
+
+### Date and Time
+
+```go
+bp.Timestamp("created_at").Nullable()
+bp.Timestamp("updated_at").Nullable()
+bp.Date("date_of_birth").Nullable()
+```
+
+### UUID
+
+```go
+bp.UUID("uuid").Primary()
+bp.UUID("external_id").Unique()
+```
+
+### JSON
+
+```go
+bp.JSON("metadata").Nullable()
+bp.JSON("settings").Default("{}")
+```
+
+<Callout type="info">
+  JSON column support depends on your database. PostgreSQL has native `JSONB` support, MySQL uses `JSON`, and SQLite stores JSON as text. See [Database Grammars](/docs/database-grammars) for type mapping details.
+</Callout>
+
+### Binary
+
+```go
+bp.Binary("avatar")
+bp.Binary("file_data").Nullable()
+```
+
+### Enum
+
+```go
+bp.Enum("status", []string{"draft", "published", "archived"})
+bp.Enum("role", []string{"admin", "editor", "viewer"}).Default("viewer")
+```
+
+`Enum` restricts a column to a fixed set of allowed values. The implementation varies by database:
+
+<Callout type="info">
+  Enum behavior differs across databases:
+  - **PostgreSQL:** `VARCHAR(255)` with a `CHECK` constraint — `CHECK ("status" IN ('draft','published','archived'))`
+  - **MySQL:** Native `ENUM('draft','published','archived')` type
+  - **SQLite:** `TEXT` with a `CHECK` constraint — `CHECK ("status" IN ('draft','published','archived'))`
+</Callout>
+
+### Char
+
+```go
+bp.Char("country_code", 2)
+bp.Char("currency_code", 3)
+```
+
+`Char` creates a fixed-length character column (`CHAR(n)` in SQL). Use this when values always have the same length, like country codes or currency codes.
+
+### LongText and MediumText
+
+```go
+bp.LongText("full_content")
+bp.MediumText("summary").Nullable()
+```
+
+These provide text columns with size hints for MySQL. On MySQL, `LongText` maps to `LONGTEXT` and `MediumText` maps to `MEDIUMTEXT`. On PostgreSQL and SQLite, both map to `TEXT`.
+
+### TinyInt and SmallInt
+
+```go
+bp.TinyInt("priority")
+bp.SmallInt("quantity").Default(0)
+```
+
+Use these for columns that store small numeric ranges to save storage space:
+
+| Method | MySQL | PostgreSQL | SQLite |
+|--------|-------|------------|--------|
+| `TinyInt` | `TINYINT` | `SMALLINT` | `INTEGER` |
+| `SmallInt` | `SMALLINT` | `SMALLINT` | `INTEGER` |
+
+## Complete Example
+
+```go
+s.Create("products", func(bp *schema.Blueprint) {
+    bp.ID("id")
+    bp.UUID("sku").Unique()
+    bp.String("name", 255)
+    bp.Text("description").Nullable()
+    bp.LongText("full_details").Nullable()
+    bp.MediumText("summary").Nullable()
+    bp.Char("currency_code", 3).Default("USD")
+    bp.Decimal("price", 10, 2)
+    bp.Integer("stock").Default(0).Unsigned()
+    bp.SmallInt("min_order_qty").Default(1)
+    bp.TinyInt("priority").Default(0)
+    bp.Float("weight")
+    bp.Boolean("active").Default(true)
+    bp.Enum("status", []string{"draft", "published", "archived"}).Default("draft")
+    bp.JSON("attributes").Nullable()
+    bp.Binary("thumbnail").Nullable()
+    bp.Date("release_date").Nullable()
+    bp.Timestamp("created_at").Nullable()
+    bp.Timestamp("updated_at").Nullable()
+})
+```
+
+## What's Next?
+
+- [Column Modifiers](/docs/schema-builder/column-modifiers) — customize columns with Nullable, Default, Unique, and more
+- [Indexes](/docs/schema-builder/indexes) — add indexes for query performance

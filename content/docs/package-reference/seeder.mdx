@@ -1,0 +1,550 @@
+---
+title: Seeder
+description: Complete package reference for the go-migration Seeder interface, Runner, and dependency system — all public methods with signatures, parameters, return types, and usage examples.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Seeder API
+
+The seeder system lets you populate your database with test or default data. It consists of the `Seeder` interface, the `Runner` for execution, and an optional `DependsOn` interface for ordering.
+
+**Import path:** `github.com/gopackx/go-migration/seeder`
+
+For conceptual documentation, see [Seeders](/docs/seeders/defining-seeders).
+
+---
+
+## Seeder Interface
+
+Every seeder struct must implement this interface:
+
+```go
+type Seeder interface {
+    Run(db *sql.DB) error
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `Run` | `Run(db *sql.DB) error` | Executes the seeding logic |
+
+The `Run` method receives a `*sql.DB` connection and returns an error if seeding fails.
+
+```go
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO users (name, email) VALUES ($1, $2)",
+        "Alice", "alice@example.com",
+    )
+    return err
+}
+```
+
+See [Defining Seeders](/docs/seeders/defining-seeders).
+
+---
+
+## `seeder.AutoRegister()`
+
+Registers a seeder in the global auto-registry. Intended to be called from `init()` functions in seeder files, matching the pattern used by `migrator.AutoRegister()`.
+
+```go
+func AutoRegister(name string, s Seeder)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Unique name for this seeder |
+| `s` | `Seeder` | Pointer to a struct implementing the `Seeder` interface |
+
+**Panics** if the name is a duplicate — fail-fast at startup.
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "github.com/gopackx/go-migration/seeder"
+)
+
+func init() {
+    seeder.AutoRegister("UserSeeder", &UserSeeder{})
+}
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO users (name, email) VALUES ($1, $2)",
+        "Alice", "alice@example.com",
+    )
+    return err
+}
+```
+
+<Callout type="info">
+  When using `migrator.Run()`, auto-registered seeders are discovered automatically. Just blank-import the seeders package in your `main.go`.
+</Callout>
+
+See [Running Seeders](/docs/seeders/running-seeders).
+
+---
+
+## DependsOn Interface
+
+Optionally implement `DependsOn` to declare that a seeder must run after other seeders.
+
+```go
+type DependsOnProvider interface {
+    DependsOn() []string
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `DependsOn` | `DependsOn() []string` | Returns names of seeders that must run first |
+
+The runner performs a topological sort on the dependency graph to determine execution order.
+
+```go
+type PostSeeder struct{}
+
+func (s *PostSeeder) DependsOn() []string {
+    return []string{"UserSeeder"}
+}
+
+func (s *PostSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO posts (user_id, title) VALUES ($1, $2)",
+        1, "First Post",
+    )
+    return err
+}
+```
+
+<Callout type="warn">
+  Circular dependencies (A depends on B, B depends on A) cause a runtime error. Design seeders as a directed acyclic graph.
+</Callout>
+
+See [Dependencies](/docs/seeders/dependencies).
+
+---
+
+## TaggedSeeder Interface
+
+<Callout type="info">
+  New in v1.3.0
+</Callout>
+
+Optionally implement `TaggedSeeder` to assign tags to a seeder for selective execution.
+
+```go
+type TaggedSeeder interface {
+    Seeder
+    Tags() []string
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `Tags` | `Tags() []string` | Returns the tags this seeder belongs to |
+
+A seeder can have multiple tags. Only seeders implementing this interface are considered by `RunByTag`.
+
+```go
+type DevUserSeeder struct{}
+
+func (s *DevUserSeeder) Tags() []string {
+    return []string{"development", "testing"}
+}
+
+func (s *DevUserSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO users (name, email) VALUES ($1, $2)",
+        "Dev User", "dev@example.com",
+    )
+    return err
+}
+```
+
+See [Seeder Tags](/docs/seeders/tags).
+
+---
+
+## RollbackableSeeder Interface
+
+<Callout type="info">
+  New in v1.3.0
+</Callout>
+
+Optionally implement `RollbackableSeeder` to define custom rollback logic for a seeder.
+
+```go
+type RollbackableSeeder interface {
+    Seeder
+    Rollback(db *sql.DB) error
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `Rollback` | `Rollback(db *sql.DB) error` | Undoes the data inserted by `Run` |
+
+```go
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO users (name, email) VALUES ($1, $2)",
+        "Alice", "alice@example.com",
+    )
+    return err
+}
+
+func (s *UserSeeder) Rollback(db *sql.DB) error {
+    _, err := db.Exec("DELETE FROM users WHERE email = $1", "alice@example.com")
+    return err
+}
+```
+
+<Callout type="warn">
+  `runner.Rollback()` returns an error if the seeder does not implement `RollbackableSeeder`.
+</Callout>
+
+See [Seeder Rollback](/docs/seeders/rollback).
+
+---
+
+## `seeder.NewRunner()`
+
+Creates a new seeder runner bound to a database connection.
+
+```go
+func NewRunner(db *sql.DB) *Runner
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `db` | `*sql.DB` | The database connection for seeders to use |
+
+**Returns:** `*Runner`
+
+```go
+import "github.com/gopackx/go-migration/seeder"
+
+runner := seeder.NewRunner(db)
+```
+
+---
+
+## `runner.Register()`
+
+Registers a seeder with the runner under a unique name.
+
+```go
+func (r *Runner) Register(name string, s Seeder)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Unique name for this seeder |
+| `s` | `Seeder` | Pointer to a struct implementing the `Seeder` interface |
+
+```go
+runner.Register("UserSeeder", &seeders.UserSeeder{})
+runner.Register("PostSeeder", &seeders.PostSeeder{})
+runner.Register("RoleSeeder", &seeders.RoleSeeder{})
+```
+
+<Callout type="info">
+  The name passed to `Register()` is used to reference the seeder in `Run()` and in `DependsOn()` declarations.
+</Callout>
+
+---
+
+## `runner.RunAll()`
+
+Executes all registered seeders. Respects dependency ordering.
+
+```go
+func (r *Runner) RunAll() error
+```
+
+**Returns:** `error` — returns `nil` on success, or the first error encountered.
+
+Seeders run sequentially. If a seeder returns an error, execution stops immediately. Seeders that completed before the failure remain applied.
+
+```go
+if err := runner.RunAll(); err != nil {
+    log.Fatal(err)
+}
+```
+
+See [Running Seeders](/docs/seeders/running-seeders).
+
+---
+
+## `runner.Run()`
+
+Executes a single seeder by its registered name.
+
+```go
+func (r *Runner) Run(name string) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | The name used in `Register()` |
+
+**Returns:** `error` — returns an error if the name doesn't match any registered seeder or if the seeder fails.
+
+```go
+if err := runner.Run("UserSeeder"); err != nil {
+    log.Fatal(err)
+}
+```
+
+See [Running Seeders](/docs/seeders/running-seeders).
+
+---
+
+## `runner.RunByTag()`
+
+<Callout type="info">
+  New in v1.3.0
+</Callout>
+
+Executes all registered seeders that implement `TaggedSeeder` and have a matching tag.
+
+```go
+func (r *Runner) RunByTag(tag string) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `tag` | `string` | The tag to match against |
+
+**Returns:** `error` — returns `nil` on success, or the first error encountered.
+
+Seeders that don't implement `TaggedSeeder` are silently skipped. Only seeders whose `Tags()` method returns a slice containing the specified tag are executed.
+
+```go
+if err := runner.RunByTag("development"); err != nil {
+    log.Fatal(err)
+}
+```
+
+See [Seeder Tags](/docs/seeders/tags).
+
+---
+
+## `runner.Rollback()`
+
+<Callout type="info">
+  New in v1.3.0
+</Callout>
+
+Rolls back a specific seeder by calling its `Rollback` method.
+
+```go
+func (r *Runner) Rollback(name string) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | The name used in `Register()` |
+
+**Returns:** `error` — returns an error if the name doesn't match any registered seeder, if the seeder doesn't implement `RollbackableSeeder`, or if the rollback fails.
+
+```go
+if err := runner.Rollback("UserSeeder"); err != nil {
+    log.Fatal(err)
+}
+```
+
+See [Seeder Rollback](/docs/seeders/rollback).
+
+---
+
+## `runner.Truncate()`
+
+<Callout type="info">
+  New in v1.3.0
+</Callout>
+
+Deletes all rows from a table.
+
+```go
+func (r *Runner) Truncate(table string) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `table` | `string` | The table name to truncate |
+
+**Returns:** `error` — returns `nil` on success, or an error if the operation fails.
+
+Uses `DELETE FROM` for broad compatibility across databases.
+
+```go
+if err := runner.Truncate("users"); err != nil {
+    log.Fatal(err)
+}
+```
+
+See [Seeder Rollback](/docs/seeders/rollback).
+
+---
+
+## `seeder.CreateMany()`
+
+Inserts records in batches using multi-row `INSERT` statements. Defaults to `DialectPostgres`.
+
+```go
+func CreateMany(db *sql.DB, table string, records []map[string]any, chunkSize int) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `db` | `*sql.DB` | The database connection |
+| `table` | `string` | Target table name |
+| `records` | `[]map[string]any` | Slice of records to insert |
+| `chunkSize` | `int` | Rows per batch. Defaults to 500 if `<= 0` |
+
+**Returns:** `error` — returns `nil` on success, or an error with the batch index range on failure.
+
+All records must have consistent keys. The function validates this before inserting.
+
+```go
+records := []map[string]any{
+    {"name": "Alice", "email": "alice@example.com"},
+    {"name": "Bob", "email": "bob@example.com"},
+}
+
+if err := seeder.CreateMany(db, "users", records, 100); err != nil {
+    log.Fatal(err)
+}
+```
+
+See [Batch Insert](/docs/seeders/batch-insert).
+
+---
+
+## `seeder.CreateManyWithDialect()`
+
+Inserts records in batches using dialect-specific SQL (placeholders and identifier quoting).
+
+```go
+func CreateManyWithDialect(db *sql.DB, table string, records []map[string]any, chunkSize int, dialect Dialect) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `db` | `*sql.DB` | The database connection |
+| `table` | `string` | Target table name |
+| `records` | `[]map[string]any` | Slice of records to insert |
+| `chunkSize` | `int` | Rows per batch. Defaults to 500 if `<= 0` |
+| `dialect` | `Dialect` | Database dialect (`DialectPostgres`, `DialectMySQL`, or `DialectSQLite`) |
+
+**Returns:** `error` — returns `nil` on success, or an error with the batch index range on failure.
+
+```go
+records := []map[string]any{
+    {"name": "Alice", "email": "alice@example.com"},
+    {"name": "Bob", "email": "bob@example.com"},
+}
+
+// MySQL dialect — uses ? placeholders and `backtick` identifiers
+if err := seeder.CreateManyWithDialect(db, "users", records, 100, seeder.DialectMySQL); err != nil {
+    log.Fatal(err)
+}
+```
+
+See [Batch Insert](/docs/seeders/batch-insert).
+
+---
+
+## Dialect Type
+
+The `Dialect` type controls placeholder syntax and identifier quoting for batch inserts.
+
+```go
+type Dialect int
+
+const (
+    DialectPostgres Dialect = iota // $1, $2 placeholders, "double quote" identifiers
+    DialectMySQL                   // ?, ? placeholders, `backtick` identifiers
+    DialectSQLite                  // ?, ? placeholders, "double quote" identifiers
+)
+```
+
+| Constant | Placeholders | Identifier Quoting |
+|----------|-------------|-------------------|
+| `DialectPostgres` | `$1, $2, $3` | `"double quotes"` |
+| `DialectMySQL` | `?, ?, ?` | `` `backticks` `` |
+| `DialectSQLite` | `?, ?, ?` | `"double quotes"` |
+
+See [Batch Insert — Multi-Dialect Support](/docs/seeders/batch-insert).
+
+---
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/seeder"
+    "your-project/seeders"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    runner := seeder.NewRunner(db)
+
+    runner.Register("UserSeeder", &seeders.UserSeeder{})
+    runner.Register("RoleSeeder", &seeders.RoleSeeder{})
+    runner.Register("PostSeeder", &seeders.PostSeeder{})
+
+    if err := runner.RunAll(); err != nil {
+        log.Fatal(err)
+    }
+
+    log.Println("Seeding complete!")
+}
+```
+
+---
+
+## Quick Reference
+
+| Component | Method | Signature | Description |
+|-----------|--------|-----------|-------------|
+| Interface | `Run` | `Run(db *sql.DB) error` | Execute seeding logic |
+| Interface | `DependsOn` | `DependsOn() []string` | Declare dependencies (optional) |
+| Interface | `Tags` | `Tags() []string` | Assign tags (optional) |
+| Interface | `Rollback` | `Rollback(db *sql.DB) error` | Custom rollback logic (optional) |
+| Registry | `AutoRegister` | `AutoRegister(name, seeder)` | Register a seeder via `init()` |
+| Runner | `NewRunner` | `NewRunner(db) *Runner` | Create a runner |
+| Runner | `Register` | `Register(name, seeder)` | Register a seeder |
+| Runner | `RunAll` | `RunAll() error` | Run all seeders |
+| Runner | `Run` | `Run(name) error` | Run a specific seeder |
+| Runner | `RunByTag` | `RunByTag(tag) error` | Run seeders matching a tag |
+| Runner | `Rollback` | `Rollback(name) error` | Roll back a specific seeder |
+| Runner | `Truncate` | `Truncate(table) error` | Delete all rows from a table |
+| Helper | `CreateMany` | `CreateMany(db, table, records, chunkSize) error` | Batch insert (Postgres default) |
+| Helper | `CreateManyWithDialect` | `CreateManyWithDialect(db, table, records, chunkSize, dialect) error` | Batch insert with dialect |
+| Type | `Dialect` | `DialectPostgres`, `DialectMySQL`, `DialectSQLite` | Database dialect for batch inserts |

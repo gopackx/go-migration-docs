@@ -1,0 +1,240 @@
+---
+title: Factory
+description: Complete package reference for the go-migration Factory[T] generic type and Faker methods — all public methods with signatures, parameters, return types, and usage examples.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Factory API
+
+The factory system generates realistic test data using a generic `Factory[T]` type and a built-in `Faker` for random value generation.
+
+**Import path:** `github.com/gopackx/go-migration/seeder/factory`
+
+For conceptual documentation, see [Factories](/docs/factories/creating-factories).
+
+---
+
+## `factory.NewFactory()`
+
+Creates a new generic factory with a builder function.
+
+```go
+func NewFactory[T any](definition func(faker Faker) T) *Factory[T]
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `definition` | `func(faker Faker) T` | Function that receives a Faker and returns an instance of `T` |
+
+**Returns:** `*Factory[T]`
+
+The builder function is called each time you generate an instance, producing unique random values on every call.
+
+```go
+import "github.com/gopackx/go-migration/seeder/factory"
+
+type User struct {
+    ID    int
+    Name  string
+    Email string
+}
+
+var UserFactory = factory.NewFactory(func(f factory.Faker) User {
+    return User{
+        ID:    f.IntBetween(1, 10000),
+        Name:  f.Name(),
+        Email: f.Email(),
+    }
+})
+```
+
+See [Creating Factories](/docs/factories/creating-factories).
+
+---
+
+## `f.Make()`
+
+Generates a single instance of type `T` by calling the builder function once.
+
+```go
+func (f *Factory[T]) Make() T
+```
+
+**Returns:** `T` — a single struct instance with random values.
+
+```go
+user := UserFactory.Make()
+fmt.Println(user.Name)  // e.g., "Alice Johnson"
+fmt.Println(user.Email) // e.g., "alice@example.com"
+```
+
+Each call produces a new instance with different random values.
+
+See [Make and MakeMany](/docs/factories/make-and-make-many).
+
+---
+
+## `f.MakeMany()`
+
+Generates a slice of `n` instances by calling the builder function `n` times.
+
+```go
+func (f *Factory[T]) MakeMany(n int) []T
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `n` | `int` | Number of instances to generate |
+
+**Returns:** `[]T` — a slice of struct instances with independently generated random values.
+
+```go
+users := UserFactory.MakeMany(50)
+for _, u := range users {
+    fmt.Printf("%s <%s>\n", u.Name, u.Email)
+}
+```
+
+<Callout type="info">
+  `MakeMany` generates all instances in memory before returning. For very large batches, consider generating and inserting in smaller chunks.
+</Callout>
+
+See [Make and MakeMany](/docs/factories/make-and-make-many).
+
+---
+
+## `f.State()`
+
+Registers a named state variant on the factory.
+
+```go
+func (f *Factory[T]) State(name string, fn func(faker Faker, base T) T) *Factory[T]
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Unique name for this state |
+| `fn` | `func(faker Faker, base T) T` | Modifier function that receives the base instance and returns a modified one |
+
+```go
+UserFactory.State("admin", func(f factory.Faker, base User) User {
+    base.Role = "admin"
+    return base
+})
+```
+
+See [Named States](/docs/factories/named-states).
+
+---
+
+## `f.WithState()`
+
+Returns a new factory instance that uses the named state's builder function.
+
+```go
+func (f *Factory[T]) WithState(name string) *Factory[T]
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Name of a previously registered state |
+
+**Returns:** `*Factory[T]` — a new factory instance (the original is unchanged).
+
+```go
+// Single admin
+admin := UserFactory.WithState("admin").Make()
+
+// Batch of admins
+admins := UserFactory.WithState("admin").MakeMany(10)
+```
+
+See [Named States](/docs/factories/named-states).
+
+---
+
+## Faker Methods
+
+The `factory.Faker` instance is passed to factory builder functions. Each method generates a new random value on every call.
+
+### String Methods
+
+| Method | Signature | Return Type | Description |
+|--------|-----------|-------------|-------------|
+| `Name` | `f.Name()` | `string` | Full person name (e.g., "Alice Johnson") |
+| `FirstName` | `f.FirstName()` | `string` | First name (e.g., "Alice") |
+| `LastName` | `f.LastName()` | `string` | Last name (e.g., "Johnson") |
+| `Email` | `f.Email()` | `string` | Email address (e.g., "alice@example.com") |
+| `Phone` | `f.Phone()` | `string` | Phone number |
+| `Address` | `f.Address()` | `string` | Full street address |
+| `City` | `f.City()` | `string` | Random city name |
+| `Country` | `f.Country()` | `string` | Random country name |
+| `UUID` | `f.UUID()` | `string` | Random UUID v4 string |
+| `Sentence` | `f.Sentence()` | `string` | Random sentence of text |
+| `Paragraph` | `f.Paragraph()` | `string` | Random paragraph of text |
+| `Word` | `f.Word()` | `string` | Random single word |
+
+### Numeric Methods
+
+| Method | Signature | Return Type | Description |
+|--------|-----------|-------------|-------------|
+| `IntBetween` | `f.IntBetween(min, max int)` | `int` | Random integer in range `[min, max]` |
+| `Float64Between` | `f.Float64Between(min, max float64)` | `float64` | Random float in range `[min, max)` |
+
+### Other Methods
+
+| Method | Signature | Return Type | Description |
+|--------|-----------|-------------|-------------|
+| `Bool` | `f.Bool()` | `bool` | Random boolean value |
+| `Date` | `f.Date()` | `time.Time` | Random date |
+| `DateBetween` | `f.DateBetween(start, end time.Time)` | `time.Time` | Random date between start and end |
+| `Pick` | `f.Pick(items []string)` | `string` | Random element from a string slice |
+
+### Usage Example
+
+```go
+var OrderFactory = factory.NewFactory(func(f factory.Faker) Order {
+    return Order{
+        ID:        f.UUID(),
+        Customer:  f.Name(),
+        Email:     f.Email(),
+        Total:     f.Float64Between(10.00, 500.00),
+        Items:     f.IntBetween(1, 20),
+        Shipped:   f.Bool(),
+        CreatedAt: f.Date(),
+    }
+})
+```
+
+See [Faker Methods](/docs/factories/faker-methods) for the full reference.
+
+---
+
+## Quick Reference
+
+| Component | Method | Signature | Description |
+|-----------|--------|-----------|-------------|
+| Factory | `NewFactory` | `NewFactory[T](builder) *Factory[T]` | Create a factory |
+| Factory | `Make` | `Make() T` | Generate one instance |
+| Factory | `MakeMany` | `MakeMany(n) []T` | Generate n instances |
+| Factory | `State` | `State(name, builder)` | Register a named state |
+| Factory | `WithState` | `WithState(name) *Factory[T]` | Use a named state |
+| Faker | `Name` | `Name() string` | Random full name |
+| Faker | `FirstName` | `FirstName() string` | Random first name |
+| Faker | `LastName` | `LastName() string` | Random last name |
+| Faker | `Email` | `Email() string` | Random email |
+| Faker | `Phone` | `Phone() string` | Random phone |
+| Faker | `Address` | `Address() string` | Random address |
+| Faker | `City` | `City() string` | Random city |
+| Faker | `Country` | `Country() string` | Random country |
+| Faker | `UUID` | `UUID() string` | Random UUID |
+| Faker | `Sentence` | `Sentence() string` | Random sentence |
+| Faker | `Paragraph` | `Paragraph() string` | Random paragraph |
+| Faker | `Word` | `Word() string` | Random word |
+| Faker | `IntBetween` | `IntBetween(min, max) int` | Random int in range |
+| Faker | `Float64Between` | `Float64Between(min, max) float64` | Random float in range |
+| Faker | `Bool` | `Bool() bool` | Random boolean |
+| Faker | `Date` | `Date() time.Time` | Random date |
+| Faker | `DateBetween` | `DateBetween(start, end) time.Time` | Random date in range |
+| Faker | `Pick` | `Pick(items) string` | Random element from slice |

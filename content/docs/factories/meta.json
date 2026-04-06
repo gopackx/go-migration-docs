@@ -1,0 +1,9 @@
+{
+  "title": "Factories",
+  "pages": [
+    "creating-factories",
+    "faker-methods",
+    "named-states",
+    "make-and-make-many"
+  ]
+}

@@ -1,0 +1,240 @@
+---
+title: Drivers
+description: Set up PostgreSQL, MySQL, and SQLite database drivers for use with go-migration.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Drivers
+
+go-migration works with any database driver compatible with Go's `database/sql` package. This page covers setup for the three supported databases: PostgreSQL, MySQL, and SQLite.
+
+## Driver Overview
+
+| Database | Driver Package | Import Path | Driver Name |
+|----------|---------------|-------------|-------------|
+| PostgreSQL | lib/pq | `github.com/lib/pq` | `postgres` |
+| MySQL | go-sql-driver/mysql | `github.com/go-sql-driver/mysql` | `mysql` |
+| SQLite | go-sqlite3 | `github.com/mattn/go-sqlite3` | `sqlite3` |
+
+## PostgreSQL
+
+Install the PostgreSQL driver:
+
+```bash
+go get github.com/lib/pq
+```
+
+Register and connect:
+
+```go title="main.go"
+package main
+
+import (
+    "log"
+    "time"
+
+    "github.com/gopackx/go-migration/database"
+    _ "github.com/lib/pq"
+)
+
+func main() {
+    mgr := database.NewManager()
+    defer mgr.Close()
+
+    mgr.RegisterDriver("postgres", "postgres")
+
+    mgr.AddConnection("default", database.ConnectionConfig{
+        Driver:          "postgres",
+        DSN:             "postgres://user:password@localhost:5432/myapp?sslmode=disable",
+        MaxOpenConns:    25,
+        MaxIdleConns:    5,
+        ConnMaxLifetime: 5 * time.Minute,
+    })
+
+    db, err := mgr.Connection("default")
+    if err != nil {
+        log.Fatalf("connection failed: %v", err)
+    }
+
+    log.Println("Connected to PostgreSQL:", db.Stats().OpenConnections, "open")
+}
+```
+
+### PostgreSQL Connection String
+
+```
+postgres://user:password@host:port/database?sslmode=disable
+```
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `user` | Database username | `postgres` |
+| `password` | Database password | `secret` |
+| `host` | Server hostname | `localhost` |
+| `port` | Server port | `5432` |
+| `database` | Database name | `myapp` |
+| `sslmode` | SSL mode | `disable`, `require`, `verify-full` |
+
+## MySQL
+
+Install the MySQL driver:
+
+```bash
+go get github.com/go-sql-driver/mysql
+```
+
+Register and connect:
+
+```go title="main.go"
+package main
+
+import (
+    "log"
+    "time"
+
+    "github.com/gopackx/go-migration/database"
+    _ "github.com/go-sql-driver/mysql"
+)
+
+func main() {
+    mgr := database.NewManager()
+    defer mgr.Close()
+
+    mgr.RegisterDriver("mysql", "mysql")
+
+    mgr.AddConnection("default", database.ConnectionConfig{
+        Driver:          "mysql",
+        DSN:             "user:password@tcp(localhost:3306)/myapp?parseTime=true",
+        MaxOpenConns:    25,
+        MaxIdleConns:    5,
+        ConnMaxLifetime: 5 * time.Minute,
+    })
+
+    db, err := mgr.Connection("default")
+    if err != nil {
+        log.Fatalf("connection failed: %v", err)
+    }
+
+    log.Println("Connected to MySQL:", db.Stats().OpenConnections, "open")
+}
+```
+
+### MySQL Connection String
+
+```
+user:password@tcp(host:port)/database?parseTime=true
+```
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `user` | Database username | `root` |
+| `password` | Database password | `secret` |
+| `host` | Server hostname | `localhost` |
+| `port` | Server port | `3306` |
+| `database` | Database name | `myapp` |
+| `parseTime` | Parse `DATE` and `DATETIME` to `time.Time` | `true` |
+
+<Callout type="info">
+  Always set `parseTime=true` when using MySQL with Go. Without it, date and time columns are returned as `[]byte` instead of `time.Time`.
+</Callout>
+
+## SQLite
+
+Install the SQLite driver:
+
+```bash
+go get github.com/mattn/go-sqlite3
+```
+
+<Callout type="warn">
+  `go-sqlite3` requires CGO to be enabled. Set `CGO_ENABLED=1` in your environment. This also means you need a C compiler installed (e.g., `gcc`).
+</Callout>
+
+Register and connect:
+
+```go title="main.go"
+package main
+
+import (
+    "log"
+    "time"
+
+    "github.com/gopackx/go-migration/database"
+    _ "github.com/mattn/go-sqlite3"
+)
+
+func main() {
+    mgr := database.NewManager()
+    defer mgr.Close()
+
+    mgr.RegisterDriver("sqlite", "sqlite3")
+
+    mgr.AddConnection("default", database.ConnectionConfig{
+        Driver:          "sqlite",
+        DSN:             "file:myapp.db?cache=shared&mode=rwc",
+        MaxOpenConns:    1,
+        MaxIdleConns:    1,
+        ConnMaxLifetime: 0,
+    })
+
+    db, err := mgr.Connection("default")
+    if err != nil {
+        log.Fatalf("connection failed: %v", err)
+    }
+
+    log.Println("Connected to SQLite:", db.Stats().OpenConnections, "open")
+}
+```
+
+### SQLite Connection String
+
+```
+file:path/to/database.db?cache=shared&mode=rwc
+```
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `file:` | Path to the database file | `file:myapp.db` |
+| `cache` | Shared cache mode | `shared` |
+| `mode` | Access mode | `rwc` (read-write-create) |
+
+<Callout type="info">
+  SQLite only supports a single writer at a time. Set `MaxOpenConns` to `1` to avoid `database is locked` errors.
+</Callout>
+
+## Registering Multiple Drivers
+
+You can register all three drivers in the same application and use them for different connections:
+
+```go
+import (
+    "github.com/gopackx/go-migration/database"
+    _ "github.com/lib/pq"
+    _ "github.com/go-sql-driver/mysql"
+    _ "github.com/mattn/go-sqlite3"
+)
+
+mgr := database.NewManager()
+
+mgr.RegisterDriver("postgres", "postgres")
+mgr.RegisterDriver("mysql", "mysql")
+mgr.RegisterDriver("sqlite", "sqlite3")
+
+// Now you can add connections using any of these drivers
+mgr.AddConnection("primary", database.ConnectionConfig{
+    Driver: "postgres",
+    DSN:    "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+})
+
+mgr.AddConnection("cache", database.ConnectionConfig{
+    Driver: "sqlite",
+    DSN:    "file:cache.db?cache=shared&mode=rwc",
+})
+```
+
+## What's Next?
+
+- [Connection Manager](/docs/connections/connection-manager) — manage multiple named connections
+- [Pool Configuration](/docs/connections/pool-configuration) — tune connection pool settings

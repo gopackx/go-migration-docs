@@ -1,0 +1,182 @@
+---
+title: Database Grammars
+description: Learn how go-migration generates SQL for PostgreSQL, MySQL, and SQLite using database grammars.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Database Grammars
+
+go-migration uses **grammars** to translate its fluent schema builder API into database-specific SQL. Each grammar knows how to map column types, modifiers, and operations to the correct syntax for its target database engine.
+
+Three grammars are supported out of the box:
+
+- **PostgreSQL** (default)
+- **MySQL**
+- **SQLite**
+
+## Selecting a Grammar
+
+When using `migrator.Run()`, the grammar is auto-resolved from the `driver` field in your `go-migration.yaml` config file. No manual grammar selection is needed:
+
+| Driver | Grammar |
+|--------|---------|
+| `postgres` | PostgreSQL |
+| `mysql` | MySQL |
+| `sqlite` | SQLite |
+
+For manual setup, pass a grammar to `migrator.New()` using the `migrator.WithGrammar()` option. If you don't specify one, PostgreSQL is used by default.
+
+<Tabs items={["PostgreSQL", "MySQL", "SQLite"]}>
+<Tab value="PostgreSQL">
+
+PostgreSQL is the default grammar — no extra configuration needed.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    // PostgreSQL grammar is used by default
+    m := migrator.New(db)
+
+    // Register migrations and run...
+}
+```
+
+</Tab>
+<Tab value="MySQL">
+
+Use `grammar.MySQL()` to generate MySQL-compatible SQL.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/go-sql-driver/mysql"
+
+    "github.com/gopackx/go-migration/grammar"
+    "github.com/gopackx/go-migration/migrator"
+)
+
+func main() {
+    db, err := sql.Open("mysql", "user:password@tcp(localhost:3306)/mydb")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db, migrator.WithGrammar(grammar.MySQL()))
+
+    // Register migrations and run...
+}
+```
+
+</Tab>
+<Tab value="SQLite">
+
+Use `grammar.SQLite()` to generate SQLite-compatible SQL.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/mattn/go-sqlite3"
+
+    "github.com/gopackx/go-migration/grammar"
+    "github.com/gopackx/go-migration/migrator"
+)
+
+func main() {
+    db, err := sql.Open("sqlite3", "./app.db")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db, migrator.WithGrammar(grammar.SQLite()))
+
+    // Register migrations and run...
+}
+```
+
+</Tab>
+</Tabs>
+
+<Callout type="info">
+  The grammar only affects SQL generation. Your migration code and schema builder calls stay exactly the same regardless of which database you target.
+</Callout>
+
+## Type Mapping Table
+
+The table below shows how each go-migration column type maps to native SQL types across all three grammars.
+
+| go-migration Method | PostgreSQL | MySQL | SQLite |
+|---------------------|-----------|-------|--------|
+| `bp.ID(name)` | `BIGSERIAL PRIMARY KEY` | `BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
+| `bp.String(name, n)` | `VARCHAR(n)` | `VARCHAR(n)` | `VARCHAR(n)` |
+| `bp.Text(name)` | `TEXT` | `TEXT` | `TEXT` |
+| `bp.Integer(name)` | `INTEGER` | `INT` | `INTEGER` |
+| `bp.BigInteger(name)` | `BIGINT` | `BIGINT` | `INTEGER` |
+| `bp.Boolean(name)` | `BOOLEAN` | `TINYINT(1)` | `INTEGER` |
+| `bp.Timestamp(name)` | `TIMESTAMP` | `TIMESTAMP` | `DATETIME` |
+| `bp.Date(name)` | `DATE` | `DATE` | `DATE` |
+| `bp.Decimal(name, p, s)` | `DECIMAL(p,s)` | `DECIMAL(p,s)` | `DECIMAL(p,s)` |
+| `bp.Float(name)` | `DOUBLE PRECISION` | `DOUBLE` | `REAL` |
+| `bp.UUID(name)` | `UUID` | `CHAR(36)` | `VARCHAR(36)` |
+| `bp.JSON(name)` | `JSONB` | `JSON` | `TEXT` |
+| `bp.Binary(name)` | `BYTEA` | `BLOB` | `BLOB` |
+
+<Callout type="warn">
+  SQLite has a limited type system. Types like `BOOLEAN` and `BigInteger` map to `INTEGER`, and `JSON` is stored as `TEXT`. Your application code should handle any necessary type conversions.
+</Callout>
+
+## Key Differences Between Grammars
+
+### PostgreSQL
+
+- Uses `BIGSERIAL` for auto-incrementing IDs
+- Has native `UUID` and `JSONB` types
+- Uses `BYTEA` for binary data
+- `BOOLEAN` is a true boolean type
+
+### MySQL
+
+- Uses `BIGINT UNSIGNED AUTO_INCREMENT` for IDs
+- UUIDs are stored as `CHAR(36)`
+- Has native `JSON` type (MySQL 5.7+)
+- Booleans use `TINYINT(1)` (0 or 1)
+
+### SQLite
+
+- Uses `INTEGER PRIMARY KEY AUTOINCREMENT` for IDs
+- Most types map to SQLite's core affinities (`INTEGER`, `TEXT`, `REAL`, `BLOB`)
+- No native UUID or JSON types — stored as text
+- No native boolean — stored as integer (0 or 1)
+
+## What's Next?
+
+- [Seeders](/docs/seeders/defining-seeders) — populate your database with test data
+- [Column Types](/docs/schema-builder/column-types) — full reference of all schema builder column methods
+- [Connections](/docs/connections/connection-manager) — manage multiple database connections

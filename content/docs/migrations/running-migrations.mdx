@@ -1,0 +1,169 @@
+---
+title: Running Migrations
+description: Learn how to execute pending migrations using the m.Up() method and understand batch tracking.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+# Running Migrations
+
+Once your migrations are registered, use `m.Up()` to execute all pending migrations.
+
+## The `m.Up()` Method
+
+```go
+if err := m.Up(); err != nil {
+    log.Fatal(err)
+}
+```
+
+`m.Up()` runs all migrations that haven't been executed yet, in alphabetical order by name.
+
+## What Happens During Execution
+
+<Steps>
+
+<Step>
+
+### Migration Table Check
+
+go-migration checks if the `migrations` tracking table exists. If not, it creates one automatically to record which migrations have run.
+
+</Step>
+
+<Step>
+
+### Pending Migration Detection
+
+The migrator compares your registered migrations against the tracking table to determine which ones are pending (not yet executed).
+
+</Step>
+
+<Step>
+
+### Sequential Execution
+
+Each pending migration's `Up` method is called in order. By default, each migration runs inside its own [database transaction](/docs/migrations/transactions).
+
+</Step>
+
+<Step>
+
+### Batch Recording
+
+All migrations executed in a single `m.Up()` call are assigned the same batch number. This batch number is used for [rollback](/docs/migrations/rollback) operations.
+
+</Step>
+
+</Steps>
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    "your-project/migrations"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db)
+
+    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+
+    // Run all pending migrations
+    if err := m.Up(); err != nil {
+        log.Fatal(err)
+    }
+
+    log.Println("All migrations completed successfully!")
+}
+```
+
+## Idempotent Behavior
+
+Calling `m.Up()` multiple times is safe. Migrations that have already run are skipped — only pending migrations are executed. This makes it safe to call `m.Up()` on every application startup.
+
+<Callout type="info">
+  If a migration fails partway through, the transaction for that specific migration is rolled back. Previously completed migrations in the same batch remain applied. See [Transactions](/docs/migrations/transactions) for details.
+</Callout>
+
+## Progress Reporting
+
+Use the `WithProgress` option to receive real-time progress events as each migration executes. This is useful for logging, progress bars, or monitoring long-running migration batches.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "fmt"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    "your-project/migrations"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db, migrator.WithProgress(func(e migrator.ProgressEvent) {
+        fmt.Printf("[%d/%d] %s %s (%s)\n", e.Index, e.Total, e.Direction, e.Name, e.Duration)
+    }))
+
+    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+
+    if err := m.Up(); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+### Example Output
+
+```
+[1/2] up 20240101_create_users_table (12ms)
+[2/2] up 20240115_create_posts_table (8ms)
+```
+
+The `ProgressEvent` struct contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Name` | `string` | The migration name |
+| `Index` | `int` | 1-based index of the current migration |
+| `Total` | `int` | Total number of migrations being executed |
+| `Duration` | `time.Duration` | Time taken for this migration |
+| `Direction` | `string` | `"up"` or `"down"` |
+
+Progress events fire for both `Up()` and `Rollback()` operations. The `Direction` field tells you which way the migration ran.
+
+<Callout type="info">
+  The progress callback is invoked after each migration completes successfully. If a migration fails, no progress event is emitted for it.
+</Callout>
+
+## What's Next?
+
+- [Batch Tracking](/docs/migrations/batch-tracking) — understand how batch numbers work
+- [Rollback](/docs/migrations/rollback) — undo migrations when needed

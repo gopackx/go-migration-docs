@@ -1,0 +1,230 @@
+---
+title: Error Handling
+description: Handle and diagnose errors from go-migration using typed error values, errors.Is(), errors.As(), and a troubleshooting guide for common scenarios.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Error Handling
+
+go-migration returns **typed error values** for common failure scenarios. This lets you inspect errors programmatically using Go's standard `errors.Is()` and `errors.As()` functions, rather than relying on string matching.
+
+## Typed Error Values
+
+go-migration exports the following sentinel errors:
+
+| Error | Description |
+|-------|-------------|
+| `ErrMigrationNotFound` | The requested migration name does not exist in the registry |
+| `ErrDuplicateMigration` | A migration with the same name has already been registered |
+| `ErrMigrationFailed` | A migration's `Up` or `Down` method returned an error |
+| `ErrRollbackFailed` | A rollback operation failed during execution |
+| `ErrSeederNotFound` | The requested seeder name does not exist in the registry |
+| `ErrCircularDependency` | Seeder dependencies form a cycle that cannot be resolved |
+| `ErrDatabaseConnection` | The database connection could not be established or was lost |
+| `ErrMigrationTableExists` | The migrations tracking table already exists |
+| `ErrNoMigrationsToRun` | No pending migrations were found to execute |
+| `ErrTransactionFailed` | A transaction commit or rollback failed |
+
+These errors are defined in the `migrator` and `seeder` packages:
+
+```go
+import (
+    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/seeder"
+)
+```
+
+## Using errors.Is()
+
+Use `errors.Is()` to check whether an error matches a specific typed error. This works even when the error is wrapped with additional context.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "errors"
+    "fmt"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db)
+
+    // Register migrations...
+
+    if err := m.Up(); err != nil {
+        switch {
+        case errors.Is(err, migrator.ErrDuplicateMigration):
+            log.Println("A migration with the same name is already registered")
+        case errors.Is(err, migrator.ErrMigrationFailed):
+            log.Printf("Migration execution failed: %v", err)
+        case errors.Is(err, migrator.ErrNoMigrationsToRun):
+            log.Println("Database is already up to date")
+        default:
+            log.Fatalf("Unexpected error: %v", err)
+        }
+    }
+
+    fmt.Println("Migrations applied successfully")
+}
+```
+
+### Checking Rollback Errors
+
+```go title="main.go"
+if err := m.Rollback(0); err != nil {
+    if errors.Is(err, migrator.ErrRollbackFailed) {
+        log.Printf("Rollback failed: %v", err)
+        // Investigate the database state manually
+    } else if errors.Is(err, migrator.ErrNoMigrationsToRun) {
+        log.Println("Nothing to roll back")
+    } else {
+        log.Fatalf("Unexpected rollback error: %v", err)
+    }
+}
+```
+
+### Checking Seeder Errors
+
+```go title="main.go"
+import (
+    "errors"
+    "log"
+
+    "github.com/gopackx/go-migration/seeder"
+)
+
+if err := runner.RunAll(); err != nil {
+    switch {
+    case errors.Is(err, seeder.ErrSeederNotFound):
+        log.Println("Seeder not found in the registry")
+    case errors.Is(err, seeder.ErrCircularDependency):
+        log.Println("Circular dependency detected between seeders")
+    default:
+        log.Fatalf("Seeding failed: %v", err)
+    }
+}
+```
+
+## Using errors.As()
+
+Use `errors.As()` to extract a specific error type and access its fields. This is useful when go-migration wraps errors with additional context like the migration name or underlying database error.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "errors"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db)
+
+    // Register migrations...
+
+    if err := m.Up(); err != nil {
+        var migrationErr *migrator.MigrationError
+        if errors.As(err, &migrationErr) {
+            log.Printf("Migration '%s' failed: %v", migrationErr.Name, migrationErr.Cause)
+            log.Printf("Direction: %s", migrationErr.Direction) // "up" or "down"
+        } else {
+            log.Fatalf("Error: %v", err)
+        }
+    }
+}
+```
+
+The `MigrationError` type provides structured information about the failure:
+
+```go
+type MigrationError struct {
+    Name      string // Migration name (e.g., "20240101_000001_create_users_table")
+    Direction string // "up" or "down"
+    Cause     error  // The underlying error
+}
+```
+
+<Callout type="info">
+  `errors.As()` unwraps the error chain automatically. Even if the error is wrapped multiple times, `errors.As()` will find the first matching type in the chain.
+</Callout>
+
+## Wrapping Errors in Migrations
+
+When returning errors from your `Up` or `Down` methods, wrap them with `fmt.Errorf` and the `%w` verb to preserve the error chain:
+
+```go title="migrations/create_users_table.go"
+func (m *CreateUsersTable) Up(s *schema.Builder) error {
+    err := s.Create("users", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.String("email", 255).Unique()
+        bp.Timestamp("created_at")
+    })
+    if err != nil {
+        return fmt.Errorf("failed to create users table: %w", err)
+    }
+    return nil
+}
+```
+
+This ensures callers can use both `errors.Is()` and `errors.As()` to inspect the full error chain.
+
+## Troubleshooting
+
+Common error scenarios you may encounter when using go-migration:
+
+| Scenario | Cause | Solution |
+|----------|-------|----------|
+| "migration table already exists" | Calling `m.Install()` when the migrations table is already created | Skip `m.Install()` if the table exists, or use `m.Up()` which handles table creation automatically |
+| "duplicate migration name" | Two migrations registered with the same name via `m.Register()` | Ensure each migration has a unique timestamp-prefixed name (e.g., `20240101_000001_create_users_table`) |
+| "migration not found" | Calling `m.Rollback()` or referencing a migration name that isn't registered | Verify the migration is registered with `m.Register()` before running operations |
+| "database connection refused" | The database server is not running or the connection string is incorrect | Check that the database is running, verify host/port/credentials, and test with `db.Ping()` |
+| "transaction deadlock" | Two concurrent migrations or queries are waiting on each other's locks | Avoid running migrations concurrently; use `DisableTransaction()` for long-running DDL operations that may conflict |
+| "permission denied" | The database user lacks privileges to create/alter/drop tables | Grant the necessary DDL privileges (`CREATE`, `ALTER`, `DROP`) to the database user |
+| "rollback failed" | The `Down` method contains an error or references objects that don't exist | Review the `Down` method logic; ensure it reverses the `Up` method correctly and handles missing objects gracefully |
+| "circular dependency" | Seeder A depends on Seeder B, which depends on Seeder A (directly or transitively) | Restructure seeder dependencies to form a directed acyclic graph (DAG) — remove or reorganize the cycle |
+| "seeder not found" | Calling `runner.Run("Name")` with a seeder name that isn't registered | Check the seeder name matches exactly what was passed to `runner.Register()` |
+| "connection pool exhausted" | Too many concurrent operations exceed `MaxOpenConns` | Increase `MaxOpenConns` in your configuration or reduce concurrent database operations |
+| "SSL certificate error" | PostgreSQL `sslmode` is set to `verify-ca` or `verify-full` but the certificate is missing or invalid | Provide valid SSL certificates or set `sslmode: disable` for local development |
+| "column type not supported" | Using a column type that the current database grammar doesn't support | Check the [Database Grammars](/docs/database-grammars) page for supported types per database engine |
+
+<Callout type="warn">
+  Always test migrations in a staging environment before running them in production. Use `m.Status()` to review pending migrations and `m.Rollback(0)` to undo the last batch if something goes wrong.
+</Callout>
+
+## Best Practices
+
+- **Always check errors** — never discard the return value from `m.Up()`, `m.Rollback()`, or seeder operations
+- **Use `errors.Is()` for sentinel errors** — check for specific error types to handle known failure modes gracefully
+- **Use `errors.As()` for structured errors** — extract migration name and direction from `MigrationError` for detailed logging
+- **Wrap errors with `%w`** — preserve the error chain in your migration `Up` and `Down` methods so callers can inspect the full context
+- **Log before exiting** — when a migration fails, log the error details before terminating to aid debugging
+
+## What's Next?
+
+- [Package Reference](/docs/package-reference) — complete method signatures for all go-migration packages
+- [CLI Reference](/docs/cli) — run migrations from the command line
+- [Hooks](/docs/hooks) — execute custom logic before and after migrations

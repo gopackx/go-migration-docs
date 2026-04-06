@@ -1,0 +1,162 @@
+---
+title: Registering Migrations
+description: Learn how to register migration structs with the migrator — auto-discovery via init() or manual registration.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Registering Migrations
+
+After defining your migration structs, you need to register them with the migrator so it knows which migrations to run and in what order. go-migration supports two approaches: **auto-discovery** (recommended) and **manual registration**.
+
+## Timestamp Naming Convention
+
+Migration names must follow a timestamp-based naming convention. Starting with v1.4.0, the recommended format includes a random 4-digit segment to prevent timestamp collisions:
+
+```
+YYYY_MM_DD_HHMMSS_RRRR_description
+```
+
+For example:
+
+| Migration Name | Format | Description |
+|---------------|--------|-------------|
+| `2025_01_15_143022_1234_create_users_table` | New (v1.4.0) | Creates the users table |
+| `2025_01_15_143045_5678_create_posts_table` | New (v1.4.0) | Creates the posts table |
+| `2025_02_01_091500_4321_add_phone_to_users` | New (v1.4.0) | Adds a phone column to users |
+| `20240101000001_create_users` | Legacy (still supported) | Creates the users table |
+| `20240101000002_create_posts` | Legacy (still supported) | Creates the posts table |
+
+go-migration sorts migrations alphabetically by name, so timestamp prefixes ensure they execute in chronological order.
+
+<Callout type="info">
+  Both naming formats can be used together in the same project. go-migration accepts both the new format (`YYYY_MM_DD_HHMMSS_RRRR_description`) and the legacy format (`YYYYMMDDHHMMSS_description`). Migrations from both formats are sorted and executed in correct chronological order.
+</Callout>
+
+<Callout type="warn">
+  Each migration name must be unique. Duplicate names will cause a panic at startup (auto-discovery) or return an error (manual registration).
+</Callout>
+
+## Auto-Discovery (Recommended)
+
+Auto-discovery uses Go's `init()` function pattern for self-registration. Each migration file registers itself, and the migrator loads them automatically.
+
+<Callout type="info">
+  In v1.4.0, the `make:migration` command automatically generates migration files with `init()` and `migrator.AutoRegister()` included — no manual registration code needed. Just run `go-migration make:migration create_users_table` and the generated file is ready to use.
+</Callout>
+
+### Step 1: Add `init()` to Each Migration File
+
+When you create a migration with `make:migration`, the generated file already includes the `init()` function with `migrator.AutoRegister()`:
+
+```go title="database/migrations/2025_01_15_143022_1234_create_users_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/schema"
+)
+
+func init() {
+    migrator.AutoRegister("2025_01_15_143022_1234_create_users_table", &CreateUsersTable{})
+}
+
+type CreateUsersTable struct{}
+
+func (m *CreateUsersTable) Up(s *schema.Builder) error {
+    return s.Create("users", func(bp *schema.Blueprint) {
+        bp.ID()
+        bp.String("name", 255)
+        bp.String("email", 255).Unique()
+        bp.Timestamps()
+    })
+}
+
+func (m *CreateUsersTable) Down(s *schema.Builder) error {
+    return s.Drop("users")
+}
+```
+
+### Step 2: Use `WithAutoDiscover()` in main.go
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    _ "your-project/database/migrations" // blank import triggers init() functions
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db, migrator.WithAutoDiscover())
+
+    if err := m.Up(); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+The blank import `_ "your-project/database/migrations"` triggers all `init()` functions, which register migrations into a global auto-registry. `WithAutoDiscover()` then loads them into the migrator.
+
+<Callout type="info">
+  This pattern is idiomatic Go — it's the same approach used by `database/sql` drivers, `image` decoders, and many other standard library packages.
+</Callout>
+
+### How It Works
+
+1. Each migration file calls `migrator.AutoRegister()` in its `init()` function
+2. Go runtime executes all `init()` functions when the package is imported
+3. `WithAutoDiscover()` (or `m.AutoDiscover()`) loads all auto-registered migrations into the migrator's internal registry
+4. Migrations are automatically sorted by timestamp name
+
+### Error Handling
+
+`AutoRegister()` panics on invalid input because it runs inside `init()` where errors can't be returned. This is intentional — configuration errors are caught immediately at startup:
+
+- Invalid name format → panic with descriptive message
+- Duplicate name → panic identifying the conflicting name
+
+## Manual Registration
+
+You can also register migrations explicitly using `m.Register()`:
+
+```go title="main.go"
+m := migrator.New(db)
+
+m.Register("2025_01_15_143022_1234_create_users_table", &migrations.CreateUsersTable{})
+m.Register("2025_01_15_143045_5678_create_posts_table", &migrations.CreatePostsTable{})
+
+if err := m.Up(); err != nil {
+    log.Fatal(err)
+}
+```
+
+## Combining Both Approaches
+
+Auto-discovery and manual registration can be used together. This is useful when migrating an existing project to auto-discovery incrementally:
+
+```go
+m := migrator.New(db, migrator.WithAutoDiscover())
+
+// Additional migrations not yet converted to auto-discovery
+m.Register("2025_03_01_120000_9876_legacy_migration", &migrations.LegacyMigration{})
+```
+
+The migrator merges migrations from both sources in correct timestamp order. If the same name appears in both, `AutoDiscover()` returns an error (or `WithAutoDiscover()` panics).
+
+## What's Next?
+
+- [Running Migrations](/docs/migrations/running-migrations) — execute your registered migrations
+- [Migration Status](/docs/migrations/migration-status) — check which migrations have run

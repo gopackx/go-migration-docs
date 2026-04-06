@@ -1,0 +1,25 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "---Getting Started---",
+    "getting-started",
+    "---Core Concepts---",
+    "migrations",
+    "schema-builder",
+    "database-grammars",
+    "---Data Seeding---",
+    "seeders",
+    "factories",
+    "---Infrastructure---",
+    "connections",
+    "hooks",
+    "cli",
+    "configuration",
+    "---Guides---",
+    "framework-integration",
+    "error-handling",
+    "package-reference",
+    "---Resources---",
+    "changelog"
+  ]
+}

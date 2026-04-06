@@ -1,0 +1,415 @@
+---
+title: Building Your CLI
+description: Build a project-specific CLI binary that works like Laravel Artisan — run migrations, seeders, and factories from anywhere.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Building Your CLI
+
+Go is a compiled language, so unlike PHP (Laravel Artisan) or Python (Django manage.py), you need to build a binary that includes your migrations, seeders, and factories. This binary becomes your project's CLI tool — you can run it anywhere, including inside Docker containers.
+
+<Callout type="info">
+  **Quick Setup:** `go-migration init` can automatically create `cmd/migrator/main.go` and the entire project structure for you. See the [CLI Reference](/docs/cli) for details.
+</Callout>
+
+<Callout type="info">
+  Think of this as building your own `artisan` command. Once built, you get the same experience: `pos migrate:up`, `pos db:seed`, `pos migrate:fresh`, etc.
+</Callout>
+
+## Why Do I Need This?
+
+<Callout type="info">
+  **New in v1.2.0:** If you don't need custom CLI logic, you can use `migrator.Run()` instead of building a custom binary. It handles config loading, DB connection, auto-discovery, and command dispatch in a single call. See [Quick Start](/docs/getting-started/quick-start) for details.
+</Callout>
+
+The global `go-migration` CLI can only scaffold files (`make:migration`, `make:seeder`, `make:factory`) and manage the tracking table. It cannot execute your migrations because your `Up()` and `Down()` methods are Go code that must be compiled into a binary.
+
+If you need custom logic beyond what `migrator.Run()` provides (custom commands, middleware, special initialization), build your own CLI binary:
+- All migration structs (compiled via auto-discovery)
+- All seeders and factories
+- Database configuration
+
+| Tool | Can scaffold files | Can init project | Can run migrations | Can seed data |
+|------|---|---|---|---|
+| `go-migration` CLI (global) | ✓ | ✓ | ✗ | ✗ |
+| Your project binary (e.g. `pos`) | ✗ | ✗ | ✓ | ✓ |
+
+## Quick Setup
+
+<Steps>
+
+<Step>
+
+### Create the CLI entry point
+
+Create a `cmd/` directory with your CLI binary. This is the standard Go project layout for executables.
+
+```go title="cmd/cli/main.go"
+package main
+
+import (
+    "database/sql"
+    "flag"
+    "fmt"
+    "log"
+    "os"
+
+    _ "github.com/lib/pq"
+
+    "your-project/internal/infrastructure/database/seeders"
+    _ "your-project/internal/infrastructure/database/migrations"
+
+    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/schema/grammars"
+    "github.com/gopackx/go-migration/seeder"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:pass@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db,
+        migrator.WithGrammar(&grammars.PostgresGrammar{}),
+        migrator.WithAutoDiscover(),
+    )
+
+    runner := seeder.NewRunner(db)
+    runner.Register("UserSeeder", &seeders.UserSeeder{})
+
+    if len(os.Args) < 2 {
+        printUsage()
+        return
+    }
+
+    switch os.Args[1] {
+    case "migrate:up":
+        if err := m.Up(); err != nil {
+            log.Fatal(err)
+        }
+        fmt.Println("✓ Migrations applied")
+    case "migrate:rollback":
+        fs := flag.NewFlagSet("rollback", flag.ExitOnError)
+        steps := fs.Int("steps", 0, "Steps to rollback")
+        fs.Parse(os.Args[2:])
+        if err := m.Rollback(*steps); err != nil {
+            log.Fatal(err)
+        }
+        fmt.Println("✓ Rollback completed")
+    case "migrate:reset":
+        if err := m.Reset(); err != nil {
+            log.Fatal(err)
+        }
+        fmt.Println("✓ All migrations rolled back")
+    case "migrate:refresh":
+        if err := m.Refresh(); err != nil {
+            log.Fatal(err)
+        }
+        fmt.Println("✓ Migrations refreshed")
+    case "migrate:fresh":
+        if err := m.Fresh(); err != nil {
+            log.Fatal(err)
+        }
+        fmt.Println("✓ Fresh migrations completed")
+    case "migrate:status":
+        statuses, err := m.Status()
+        if err != nil {
+            log.Fatal(err)
+        }
+        for _, s := range statuses {
+            applied := "Pending"
+            if s.Ran {
+                applied = fmt.Sprintf("Batch %d", s.Batch)
+            }
+            fmt.Printf("  %-40s %s\n", s.Name, applied)
+        }
+    case "db:seed":
+        fs := flag.NewFlagSet("seed", flag.ExitOnError)
+        class := fs.String("class", "", "Specific seeder")
+        fs.Parse(os.Args[2:])
+        if *class != "" {
+            if err := runner.Run(*class); err != nil {
+                log.Fatal(err)
+            }
+        } else {
+            if err := runner.RunAll(); err != nil {
+                log.Fatal(err)
+            }
+        }
+        fmt.Println("✓ Seeding completed")
+    default:
+        printUsage()
+    }
+}
+
+func printUsage() {
+    fmt.Println("Usage: myapp <command> [flags]")
+    fmt.Println()
+    fmt.Println("Commands:")
+    fmt.Println("  migrate:up        Run all pending migrations")
+    fmt.Println("  migrate:rollback  Rollback (--steps=N)")
+    fmt.Println("  migrate:reset     Rollback all migrations")
+    fmt.Println("  migrate:refresh   Reset + re-run all")
+    fmt.Println("  migrate:fresh     Drop all tables + re-run")
+    fmt.Println("  migrate:status    Show migration status")
+    fmt.Println("  db:seed           Run seeders (--class=Name)")
+}
+```
+
+</Step>
+
+<Step>
+
+### Build the binary
+
+```bash
+go build -o myapp ./cmd/cli
+```
+
+On Windows this produces `myapp.exe`. On Linux/macOS it produces `myapp`.
+
+</Step>
+
+<Step>
+
+### Use it
+
+```bash
+# Run migrations
+./myapp migrate:up
+
+# Check status
+./myapp migrate:status
+
+# Seed data
+./myapp db:seed
+
+# Rollback last 2 migrations
+./myapp migrate:rollback --steps=2
+
+# Full reset and re-run
+./myapp migrate:fresh
+```
+
+</Step>
+
+</Steps>
+
+## Install Globally
+
+To make the binary available from any directory (like `php artisan` is available project-wide):
+
+<Tabs items={["Windows", "Linux / macOS"]}>
+  <Tab value="Windows">
+    ```bash
+    go build -o myapp.exe ./cmd/cli
+    copy myapp.exe %GOPATH%\bin\myapp.exe
+    ```
+
+    Now you can run `myapp migrate:up` from anywhere.
+  </Tab>
+  <Tab value="Linux / macOS">
+    ```bash
+    go build -o myapp ./cmd/cli
+    cp myapp $GOPATH/bin/myapp
+    ```
+
+    Or use `go install`:
+    ```bash
+    go install ./cmd/cli
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="warn">
+  Remember to rebuild and reinstall the binary whenever you add new migrations, seeders, or factories. The binary is compiled — new Go files won't take effect until you rebuild.
+</Callout>
+
+## Using with Docker
+
+This is where the binary approach really shines. You can run migrations as part of your Docker workflow.
+
+### Dockerfile
+
+```dockerfile title="Dockerfile"
+# Build stage
+FROM golang:1.22-alpine AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -o /myapp ./cmd/cli
+
+# Runtime stage
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /myapp /usr/local/bin/myapp
+ENTRYPOINT ["myapp"]
+```
+
+### docker-compose.yml
+
+```yaml title="docker-compose.yml"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_NAME: mydb
+      DB_USER: postgres
+      DB_PASSWORD: secret
+```
+
+### Running commands in Docker
+
+```bash
+# Run migrations
+docker compose run --rm app migrate:up
+
+# Seed data
+docker compose run --rm app db:seed
+
+# Check status
+docker compose run --rm app migrate:status
+
+# Fresh start
+docker compose run --rm app migrate:fresh
+```
+
+This is the same experience as running `docker compose exec app php artisan migrate` in a Laravel project.
+
+## Makefile Shortcuts
+
+Add a `Makefile` for convenience:
+
+```makefile title="Makefile"
+BINARY := myapp
+CLI    := ./cmd/cli
+
+.PHONY: build install migrate seed fresh status
+
+build:
+	go build -o $(BINARY) $(CLI)
+
+install:
+	go install $(CLI)
+
+migrate:
+	go run $(CLI) migrate:up
+
+seed:
+	go run $(CLI) db:seed
+
+fresh:
+	go run $(CLI) migrate:fresh
+
+status:
+	go run $(CLI) migrate:status
+```
+
+Now you can use `make migrate`, `make seed`, `make fresh` during development without building first.
+
+## Environment-Based Configuration
+
+For production, use environment variables instead of hardcoded connection strings:
+
+```go title="internal/config/config.go"
+package config
+
+import (
+    "database/sql"
+    "fmt"
+    "os"
+)
+
+type DatabaseConfig struct {
+    Host     string
+    Port     int
+    Database string
+    Username string
+    Password string
+    SSLMode  string
+}
+
+func Load() DatabaseConfig {
+    return DatabaseConfig{
+        Host:     getEnv("DB_HOST", "localhost"),
+        Port:     5432,
+        Database: getEnv("DB_NAME", "mydb"),
+        Username: getEnv("DB_USER", "postgres"),
+        Password: getEnv("DB_PASSWORD", "secret"),
+        SSLMode:  getEnv("DB_SSLMODE", "disable"),
+    }
+}
+
+func (c DatabaseConfig) DSN() string {
+    return fmt.Sprintf(
+        "postgres://%s:%s@%s:%d/%s?sslmode=%s",
+        c.Username, c.Password, c.Host, c.Port, c.Database, c.SSLMode,
+    )
+}
+
+func (c DatabaseConfig) Open() (*sql.DB, error) {
+    return sql.Open("postgres", c.DSN())
+}
+
+func getEnv(key, fallback string) string {
+    if v := os.Getenv(key); v != "" {
+        return v
+    }
+    return fallback
+}
+```
+
+Then in your CLI:
+
+```go
+cfg := config.Load()
+db, err := cfg.Open()
+```
+
+This way the same binary works locally (defaults) and in Docker/production (env vars).
+
+## Comparison with Laravel
+
+| Laravel | go-migration |
+|---------|-------------|
+| `php artisan migrate` | `myapp migrate:up` |
+| `php artisan migrate:rollback` | `myapp migrate:rollback` |
+| `php artisan migrate:fresh` | `myapp migrate:fresh` |
+| `php artisan migrate:status` | `myapp migrate:status` |
+| `php artisan db:seed` | `myapp db:seed` |
+| `php artisan db:seed --class=UserSeeder` | `myapp db:seed --class=UserSeeder` |
+| `php artisan make:migration` | `go-migration make:migration` |
+| `php artisan make:seeder` | `go-migration make:seeder` |
+| `php artisan make:factory` | `go-migration make:factory` |
+
+The key difference: `make:*` commands use the global `go-migration` CLI (scaffolding), while runtime commands (`migrate:*`, `db:seed`) use your project binary.
+
+## What's Next?
+
+- [Project Structure](/docs/getting-started/project-structure) — recommended directory layout
+- [CLI Reference](/docs/cli) — global CLI commands for scaffolding
+- [Configuration](/docs/configuration) — database connection setup

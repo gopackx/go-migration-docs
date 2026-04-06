@@ -1,0 +1,151 @@
+---
+title: Pool Configuration
+description: Configure database connection pool settings — MaxOpenConns, MaxIdleConns, and ConnMaxLifetime — with recommended values for different workloads.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Pool Configuration
+
+Go's `database/sql` package maintains a connection pool for each database. go-migration exposes these pool settings through `ConnectionConfig` so you can tune them per connection.
+
+## Pool Settings
+
+Configure pool behavior when adding a connection:
+
+```go
+mgr.AddConnection("primary", database.ConnectionConfig{
+    Driver:          "postgres",
+    DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+    MaxOpenConns:    25,
+    MaxIdleConns:    5,
+    ConnMaxLifetime: 5 * time.Minute,
+})
+```
+
+### MaxOpenConns
+
+Sets the maximum number of open connections to the database (both in-use and idle).
+
+```go
+MaxOpenConns: 25
+```
+
+- Default: `0` (unlimited)
+- When the limit is reached, new queries block until a connection becomes available
+- Set this to prevent overwhelming your database server
+
+### MaxIdleConns
+
+Sets the maximum number of idle connections kept in the pool.
+
+```go
+MaxIdleConns: 5
+```
+
+- Default: `2`
+- Idle connections are reused for new queries, avoiding the overhead of opening a new connection
+- Should be less than or equal to `MaxOpenConns`
+
+### ConnMaxLifetime
+
+Sets the maximum amount of time a connection can be reused before it's closed and replaced.
+
+```go
+ConnMaxLifetime: 5 * time.Minute
+```
+
+- Default: `0` (no limit)
+- Helps cycle connections through load balancers and prevents stale connections
+- Set this lower than any database-side connection timeout
+
+<Callout type="info">
+  These settings map directly to Go's `*sql.DB` methods: `SetMaxOpenConns()`, `SetMaxIdleConns()`, and `SetConnMaxLifetime()`.
+</Callout>
+
+## Recommended Values
+
+<Tabs items={["Web Application", "Background Worker", "CLI / Migration Tool"]}>
+  <Tab value="Web Application">
+    For a typical web application handling concurrent HTTP requests:
+
+    ```go
+    mgr.AddConnection("web", database.ConnectionConfig{
+        Driver:          "postgres",
+        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        MaxOpenConns:    25,
+        MaxIdleConns:    10,
+        ConnMaxLifetime: 5 * time.Minute,
+    })
+    ```
+
+    | Setting | Value | Rationale |
+    |---------|-------|-----------|
+    | `MaxOpenConns` | 25 | Handles concurrent requests without overwhelming the database |
+    | `MaxIdleConns` | 10 | Keeps warm connections ready for bursts |
+    | `ConnMaxLifetime` | 5 min | Cycles connections to stay fresh behind load balancers |
+  </Tab>
+  <Tab value="Background Worker">
+    For background job processors with lower concurrency:
+
+    ```go
+    mgr.AddConnection("worker", database.ConnectionConfig{
+        Driver:          "postgres",
+        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        MaxOpenConns:    10,
+        MaxIdleConns:    5,
+        ConnMaxLifetime: 10 * time.Minute,
+    })
+    ```
+
+    | Setting | Value | Rationale |
+    |---------|-------|-----------|
+    | `MaxOpenConns` | 10 | Lower concurrency needs fewer connections |
+    | `MaxIdleConns` | 5 | Moderate idle pool for steady throughput |
+    | `ConnMaxLifetime` | 10 min | Longer lifetime since connections are used consistently |
+  </Tab>
+  <Tab value="CLI / Migration Tool">
+    For CLI tools and migration runners that run briefly:
+
+    ```go
+    mgr.AddConnection("cli", database.ConnectionConfig{
+        Driver:          "postgres",
+        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        MaxOpenConns:    5,
+        MaxIdleConns:    2,
+        ConnMaxLifetime: 1 * time.Minute,
+    })
+    ```
+
+    | Setting | Value | Rationale |
+    |---------|-------|-----------|
+    | `MaxOpenConns` | 5 | Minimal connections for short-lived processes |
+    | `MaxIdleConns` | 2 | Small idle pool is sufficient |
+    | `ConnMaxLifetime` | 1 min | Short lifetime since the process exits quickly |
+  </Tab>
+</Tabs>
+
+## Monitoring Pool Stats
+
+You can inspect pool statistics at runtime using Go's built-in `DBStats`:
+
+```go
+db, _ := mgr.Connection("primary")
+stats := db.Stats()
+
+fmt.Printf("Open connections: %d\n", stats.OpenConnections)
+fmt.Printf("In use: %d\n", stats.InUse)
+fmt.Printf("Idle: %d\n", stats.Idle)
+fmt.Printf("Wait count: %d\n", stats.WaitCount)
+fmt.Printf("Wait duration: %s\n", stats.WaitDuration)
+```
+
+<Callout type="warn">
+  If `WaitCount` is consistently high, your `MaxOpenConns` may be too low for your workload. Increase it or optimize your queries to release connections faster.
+</Callout>
+
+## What's Next?
+
+- [Drivers](/docs/connections/drivers) — set up PostgreSQL, MySQL, and SQLite drivers
+- [Connection Manager](/docs/connections/connection-manager) — manage multiple named connections

@@ -1,0 +1,166 @@
+---
+title: Connection Manager
+description: Manage multiple named database connections with database.NewManager(), RegisterDriver(), AddConnection(), Connection(), and Close().
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Connection Manager
+
+The connection manager lets you configure and work with multiple database connections in a single application. This is useful when your app reads from a replica, writes to a primary, or connects to entirely different databases.
+
+## Creating a Manager
+
+Create a new connection manager with `database.NewManager()`:
+
+```go
+import "github.com/gopackx/go-migration/database"
+
+mgr := database.NewManager()
+defer mgr.Close()
+```
+
+The manager holds all your named connections and handles their lifecycle.
+
+## Registering Drivers
+
+Before adding connections, register the database drivers you plan to use:
+
+```go
+import (
+    "github.com/gopackx/go-migration/database"
+    _ "github.com/lib/pq"
+    _ "github.com/go-sql-driver/mysql"
+)
+
+mgr := database.NewManager()
+mgr.RegisterDriver("postgres", "postgres")
+mgr.RegisterDriver("mysql", "mysql")
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| First argument | A name you assign to this driver registration |
+| Second argument | The driver name as registered with `database/sql` |
+
+## Adding Connections
+
+Use `mgr.AddConnection()` to register a named connection with its DSN and pool settings:
+
+```go
+mgr.AddConnection("primary", database.ConnectionConfig{
+    Driver:         "postgres",
+    DSN:            "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+    MaxOpenConns:   25,
+    MaxIdleConns:   5,
+    ConnMaxLifetime: 5 * time.Minute,
+})
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Driver` | `string` | Name of the registered driver |
+| `DSN` | `string` | Data source name (connection string) |
+| `MaxOpenConns` | `int` | Maximum number of open connections |
+| `MaxIdleConns` | `int` | Maximum number of idle connections |
+| `ConnMaxLifetime` | `time.Duration` | Maximum lifetime of a connection |
+
+## Retrieving Connections
+
+Retrieve a `*sql.DB` instance by name with `mgr.Connection()`:
+
+```go
+db, err := mgr.Connection("primary")
+if err != nil {
+    log.Fatalf("failed to get connection: %v", err)
+}
+
+// Use db as a standard *sql.DB
+rows, err := db.Query("SELECT id, name FROM users")
+```
+
+<Callout type="info">
+  `Connection()` returns a standard `*sql.DB`, so you can use it with any Go database library or ORM — not just go-migration.
+</Callout>
+
+## Closing Connections
+
+Call `mgr.Close()` to close all managed connections when your application shuts down:
+
+```go
+err := mgr.Close()
+if err != nil {
+    log.Printf("error closing connections: %v", err)
+}
+```
+
+This closes every connection that was opened through the manager.
+
+## Complete Multi-Connection Example
+
+Here's a full example connecting to both PostgreSQL and MySQL:
+
+```go title="main.go"
+package main
+
+import (
+    "fmt"
+    "log"
+    "time"
+
+    "github.com/gopackx/go-migration/database"
+    _ "github.com/lib/pq"
+    _ "github.com/go-sql-driver/mysql"
+)
+
+func main() {
+    mgr := database.NewManager()
+    defer mgr.Close()
+
+    // Register drivers
+    mgr.RegisterDriver("postgres", "postgres")
+    mgr.RegisterDriver("mysql", "mysql")
+
+    // Add PostgreSQL connection
+    mgr.AddConnection("primary", database.ConnectionConfig{
+        Driver:          "postgres",
+        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        MaxOpenConns:    25,
+        MaxIdleConns:    5,
+        ConnMaxLifetime: 5 * time.Minute,
+    })
+
+    // Add MySQL connection
+    mgr.AddConnection("analytics", database.ConnectionConfig{
+        Driver:          "mysql",
+        DSN:             "user:pass@tcp(localhost:3306)/analytics?parseTime=true",
+        MaxOpenConns:    10,
+        MaxIdleConns:    3,
+        ConnMaxLifetime: 5 * time.Minute,
+    })
+
+    // Use the PostgreSQL connection
+    primaryDB, err := mgr.Connection("primary")
+    if err != nil {
+        log.Fatalf("primary connection failed: %v", err)
+    }
+
+    // Use the MySQL connection
+    analyticsDB, err := mgr.Connection("analytics")
+    if err != nil {
+        log.Fatalf("analytics connection failed: %v", err)
+    }
+
+    fmt.Println("Primary DB:", primaryDB.Stats().OpenConnections, "open connections")
+    fmt.Println("Analytics DB:", analyticsDB.Stats().OpenConnections, "open connections")
+}
+```
+
+<Callout type="warn">
+  Always call `mgr.Close()` (or use `defer mgr.Close()`) to release database connections when your application exits.
+</Callout>
+
+## What's Next?
+
+- [Pool Configuration](/docs/connections/pool-configuration) — tune connection pool settings for your workload
+- [Drivers](/docs/connections/drivers) — set up PostgreSQL, MySQL, and SQLite drivers

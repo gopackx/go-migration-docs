@@ -1,0 +1,112 @@
+---
+title: Rollback
+description: Undo migrations by rolling back the last batch or a specific number of steps.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Rollback
+
+go-migration provides the `m.Rollback()` method to undo previously executed migrations. You can roll back by batch or by step count.
+
+## Rolling Back the Last Batch
+
+Pass `0` to roll back all migrations in the most recent batch:
+
+```go
+// Roll back the last batch
+if err := m.Rollback(0); err != nil {
+    log.Fatal(err)
+}
+```
+
+This calls the `Down` method on each migration in the last batch, in reverse execution order.
+
+### Example
+
+If your migration state looks like this:
+
+| Migration | Batch |
+|-----------|-------|
+| `20240101_create_users_table` | 1 |
+| `20240115_create_posts_table` | 1 |
+| `20240201_add_phone_to_users` | 2 |
+| `20240215_create_comments_table` | 2 |
+
+Calling `m.Rollback(0)` rolls back batch 2 — `create_comments_table` first, then `add_phone_to_users` (reverse order).
+
+After rollback:
+
+| Migration | Batch |
+|-----------|-------|
+| `20240101_create_users_table` | 1 |
+| `20240115_create_posts_table` | 1 |
+
+## Step-Based Rollback
+
+Pass a positive integer to roll back a specific number of migrations, regardless of batch boundaries:
+
+```go
+// Roll back the last 3 migrations
+if err := m.Rollback(3); err != nil {
+    log.Fatal(err)
+}
+```
+
+Using the same example table above, `m.Rollback(3)` would roll back:
+1. `20240215_create_comments_table` (batch 2)
+2. `20240201_add_phone_to_users` (batch 2)
+3. `20240115_create_posts_table` (batch 1)
+
+Only `20240101_create_users_table` remains.
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    "your-project/migrations"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    m := migrator.New(db)
+
+    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+    m.Register("20240201_add_phone_to_users", &migrations.AddPhoneToUsers{})
+
+    // Roll back the last batch
+    if err := m.Rollback(0); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+<Callout type="warn">
+  Make sure all your migrations have proper `Down` methods before rolling back. A missing or incomplete `Down` method will cause the rollback to fail.
+</Callout>
+
+## Rollback vs Reset
+
+- `m.Rollback(0)` — undoes only the last batch
+- `m.Reset()` — undoes **all** migrations in reverse order
+
+See [Reset, Refresh & Fresh](/docs/migrations/reset-refresh-fresh) for more options.
+
+## What's Next?
+
+- [Reset, Refresh & Fresh](/docs/migrations/reset-refresh-fresh) — more ways to undo and re-run migrations
+- [Batch Tracking](/docs/migrations/batch-tracking) — understand how batches determine rollback scope

@@ -1,0 +1,154 @@
+---
+title: Seeder Dependencies
+description: Learn how to declare dependencies between seeders using the DependsOn method for controlled execution order.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Seeder Dependencies
+
+When seeders depend on data from other seeders, you can declare dependencies to ensure they run in the correct order.
+
+## The `DependsOn()` Method
+
+Implement the optional `DependsOn()` method on your seeder to declare which seeders must run first:
+
+```go
+type DependsOnProvider interface {
+    DependsOn() []string
+}
+```
+
+| Method | Purpose |
+|--------|---------|
+| `DependsOn() []string` | Returns a list of seeder names that must run before this seeder |
+
+The runner resolves dependencies automatically and executes seeders in the correct order.
+
+## Declaring Dependencies
+
+A `PostSeeder` that depends on `UserSeeder`:
+
+```go title="seeders/post_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+)
+
+type PostSeeder struct{}
+
+func (s *PostSeeder) DependsOn() []string {
+    return []string{"UserSeeder"}
+}
+
+func (s *PostSeeder) Run(db *sql.DB) error {
+    posts := []struct {
+        UserID int
+        Title  string
+        Body   string
+    }{
+        {1, "First Post", "Hello from Alice!"},
+        {2, "Getting Started", "Bob's introduction post."},
+    }
+
+    for _, p := range posts {
+        _, err := db.Exec(
+            "INSERT INTO posts (user_id, title, body) VALUES ($1, $2, $3)",
+            p.UserID, p.Title, p.Body,
+        )
+        if err != nil {
+            return fmt.Errorf("failed to seed post %q: %w", p.Title, err)
+        }
+    }
+
+    return nil
+}
+```
+
+Because `PostSeeder` declares a dependency on `UserSeeder`, the runner guarantees that `UserSeeder` runs first — regardless of registration order.
+
+## Dependency Resolution Order
+
+Consider three seeders with the following dependencies:
+
+```go
+// UserSeeder — no dependencies
+type UserSeeder struct{}
+
+// RoleSeeder — no dependencies
+type RoleSeeder struct{}
+
+// PostSeeder — depends on UserSeeder
+type PostSeeder struct{}
+
+func (s *PostSeeder) DependsOn() []string {
+    return []string{"UserSeeder"}
+}
+```
+
+When you register and run them:
+
+```go
+runner := seeder.NewRunner(db)
+
+runner.Register("PostSeeder", &seeders.PostSeeder{})
+runner.Register("RoleSeeder", &seeders.RoleSeeder{})
+runner.Register("UserSeeder", &seeders.UserSeeder{})
+
+// Despite registration order, the runner resolves dependencies:
+// 1. UserSeeder  (no dependencies)
+// 2. RoleSeeder  (no dependencies)
+// 3. PostSeeder  (depends on UserSeeder — runs after it)
+if err := runner.RunAll(); err != nil {
+    log.Fatal(err)
+}
+```
+
+The runner performs a topological sort on the dependency graph, so `UserSeeder` always runs before `PostSeeder` even though `PostSeeder` was registered first.
+
+## Multiple Dependencies
+
+A seeder can depend on multiple other seeders:
+
+```go title="seeders/comment_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+)
+
+type CommentSeeder struct{}
+
+func (s *CommentSeeder) DependsOn() []string {
+    return []string{"UserSeeder", "PostSeeder"}
+}
+
+func (s *CommentSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO comments (user_id, post_id, body) VALUES ($1, $2, $3)",
+        1, 1, "Great post!",
+    )
+    if err != nil {
+        return fmt.Errorf("failed to seed comment: %w", err)
+    }
+
+    return nil
+}
+```
+
+The execution order resolves to:
+
+1. `UserSeeder` — no dependencies
+2. `PostSeeder` — depends on `UserSeeder`
+3. `CommentSeeder` — depends on both `UserSeeder` and `PostSeeder`
+
+<Callout type="warn">
+  Circular dependencies (e.g., A depends on B, B depends on A) will cause an error at runtime. Design your seeders to form a directed acyclic graph (DAG).
+</Callout>
+
+## What's Next?
+
+- [Factories](/docs/factories/creating-factories) — generate realistic test data with the Factory pattern

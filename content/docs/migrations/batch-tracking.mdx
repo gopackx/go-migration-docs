@@ -1,0 +1,70 @@
+---
+title: Batch Tracking
+description: Understand how go-migration uses batch numbers to group and track migration execution.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Batch Tracking
+
+go-migration uses a batch numbering system to group migrations that were executed together. This is central to how rollbacks work.
+
+## How Batches Work
+
+Every time you call `m.Up()`, all pending migrations that run in that call are assigned the same batch number. The batch number increments with each `m.Up()` call that executes at least one migration.
+
+### Example Scenario
+
+Suppose you have four migrations and run them in two separate `m.Up()` calls:
+
+**First run** — registers and runs two migrations:
+
+```go
+m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+m.Up() // Both get batch 1
+```
+
+**Second run** — adds two more migrations and runs again:
+
+```go
+m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+m.Register("20240201_add_phone_to_users", &migrations.AddPhoneToUsers{})
+m.Register("20240215_create_comments_table", &migrations.CreateCommentsTable{})
+m.Up() // Only the two new ones run, both get batch 2
+```
+
+The resulting tracking table looks like:
+
+| Migration | Batch |
+|-----------|-------|
+| `20240101_create_users_table` | 1 |
+| `20240115_create_posts_table` | 1 |
+| `20240201_add_phone_to_users` | 2 |
+| `20240215_create_comments_table` | 2 |
+
+## The Migrations Table
+
+go-migration automatically creates a `migrations` table in your database to track execution state. This table stores:
+
+- **Migration name** — the unique name you passed to `m.Register()`
+- **Batch number** — which batch the migration belongs to
+
+<Callout type="warn">
+  Don't manually modify the migrations tracking table. Let go-migration manage it through its API methods.
+</Callout>
+
+## Why Batches Matter
+
+Batch numbers determine rollback behavior:
+
+- `m.Rollback(0)` rolls back all migrations in the **last batch** only
+- `m.Rollback(n)` rolls back the last `n` migrations regardless of batch
+
+This means you can deploy multiple migrations together and roll them all back as a unit if something goes wrong.
+
+## What's Next?
+
+- [Rollback](/docs/migrations/rollback) — undo migrations by batch or step count
+- [Migration Status](/docs/migrations/migration-status) — view the current state of all migrations

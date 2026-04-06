@@ -1,0 +1,133 @@
+---
+title: Fiber
+description: Integrate go-migration with the Fiber web framework using only *sql.DB.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+# Fiber Integration
+
+go-migration works with [Fiber](https://gofiber.io/) out of the box. Since go-migration depends only on `*sql.DB`, there are no framework-specific adapters or plugins to install.
+
+<Callout type="info">
+  go-migration is framework-agnostic. It only needs a `*sql.DB` connection — the same one your Fiber application already uses.
+</Callout>
+
+## Complete Example
+
+This example shows a Fiber application that runs migrations on startup and exposes a health-check endpoint.
+
+<Steps>
+
+<Step>
+
+### Define a Migration
+
+```go title="migrations/20240101_create_products_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type CreateProductsTable struct{}
+
+func (m *CreateProductsTable) Up(s *schema.Builder) {
+    s.Create("products", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.String("name", 255)
+        bp.Text("description").Nullable()
+        bp.Decimal("price", 10, 2)
+        bp.Integer("stock").Default(0)
+        bp.Timestamp("created_at").Nullable()
+        bp.Timestamp("updated_at").Nullable()
+    })
+}
+
+func (m *CreateProductsTable) Down(s *schema.Builder) {
+    s.DropIfExists("products")
+}
+```
+
+</Step>
+
+<Step>
+
+### Set Up the Database and Migrator
+
+Open a `*sql.DB` connection, create the migrator, register migrations, and run them before starting Fiber.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    "github.com/gofiber/fiber/v2"
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    "your-project/migrations"
+)
+
+func main() {
+    // 1. Open a database connection
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    // 2. Create the migrator
+    m := migrator.New(db)
+
+    // 3. Register migrations
+    m.Register("20240101_create_products_table", &migrations.CreateProductsTable{})
+
+    // 4. Run pending migrations
+    if err := m.Up(); err != nil {
+        log.Fatal("migration failed: ", err)
+    }
+    log.Println("Migrations completed")
+
+    // 5. Set up Fiber
+    app := fiber.New()
+
+    app.Get("/health", func(c *fiber.Ctx) error {
+        if err := db.Ping(); err != nil {
+            return c.Status(500).JSON(fiber.Map{"status": "unhealthy"})
+        }
+        return c.JSON(fiber.Map{"status": "healthy"})
+    })
+
+    log.Fatal(app.Listen(":8080"))
+}
+```
+
+</Step>
+
+<Step>
+
+### Run the Application
+
+```bash
+go run main.go
+```
+
+Fiber starts on port 8080 with all migrations applied. The `/health` endpoint confirms the database connection is active.
+
+</Step>
+
+</Steps>
+
+## Key Takeaway
+
+go-migration doesn't know or care about Fiber. It receives a `*sql.DB`, runs migrations, and returns. You can call `m.Up()` at startup, in a CLI command, or anywhere else — the integration pattern is the same regardless of framework.
+
+## What's Next?
+
+- [net/http Integration](/docs/framework-integration/net-http) — same pattern with the standard library
+- [Defining Migrations](/docs/migrations/defining-migrations) — learn more about migration structs
+- [Schema Builder](/docs/schema-builder/creating-tables) — full table and column API

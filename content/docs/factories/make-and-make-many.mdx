@@ -1,0 +1,122 @@
+---
+title: Make and MakeMany
+description: Generate single or batch struct instances from factories using f.Make() and f.MakeMany(n).
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Make and MakeMany
+
+Once you've defined a factory, use `Make()` to generate a single instance or `MakeMany(n)` to generate a batch.
+
+## Method Reference
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `f.Make()` | `T` | Generates a single instance of type `T` |
+| `f.MakeMany(n)` | `[]T` | Generates a slice of `n` instances of type `T` |
+
+## Single Instance with Make
+
+`Make()` calls the factory's builder function once and returns a single struct:
+
+```go
+package main
+
+import (
+    "fmt"
+
+    "myapp/factories"
+)
+
+func main() {
+    user := factories.UserFactory.Make()
+
+    fmt.Println(user.Name)  // e.g., "Alice Johnson"
+    fmt.Println(user.Email) // e.g., "alice@example.com"
+}
+```
+
+Each call to `Make()` produces a new instance with different random values.
+
+## Batch Generation with MakeMany
+
+`MakeMany(n)` calls the builder function `n` times and returns a slice:
+
+```go
+// Generate 10 users
+users := factories.UserFactory.MakeMany(10)
+
+for _, u := range users {
+    fmt.Printf("%s <%s>\n", u.Name, u.Email)
+}
+```
+
+Every element in the slice has independently generated random values.
+
+## Using with States
+
+Both methods work with [named states](/docs/factories/named-states):
+
+```go
+// Single admin
+admin := factories.UserFactory.WithState("admin").Make()
+
+// Batch of 20 admins
+admins := factories.UserFactory.WithState("admin").MakeMany(20)
+```
+
+## Practical Example: Seeding with Make and MakeMany
+
+```go title="seeders/product_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+
+    "github.com/gopackx/go-migration/seeder/factory"
+)
+
+type Product struct {
+    Name  string
+    Price float64
+    Stock int
+}
+
+var ProductFactory = factory.NewFactory(func(f factory.Faker) Product {
+    return Product{
+        Name:  f.Sentence(),
+        Price: f.Float64Between(5.00, 200.00),
+        Stock: f.IntBetween(0, 1000),
+    }
+})
+
+type ProductSeeder struct{}
+
+func (s *ProductSeeder) Run(db *sql.DB) error {
+    products := ProductFactory.MakeMany(100)
+
+    for _, p := range products {
+        _, err := db.Exec(
+            "INSERT INTO products (name, price, stock) VALUES ($1, $2, $3)",
+            p.Name, p.Price, p.Stock,
+        )
+        if err != nil {
+            return fmt.Errorf("failed to seed product: %w", err)
+        }
+    }
+
+    return nil
+}
+```
+
+<Callout type="info">
+  `MakeMany` generates all instances in memory before returning. For very large batches, consider generating and inserting in smaller chunks.
+</Callout>
+
+## What's Next?
+
+- [Creating Factories](/docs/factories/creating-factories) — how to define factories with `factory.NewFactory()`
+- [Faker Methods](/docs/factories/faker-methods) — full reference of data generation methods
+- [Named States](/docs/factories/named-states) — define factory variants with state overrides

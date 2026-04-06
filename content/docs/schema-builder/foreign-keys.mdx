@@ -1,0 +1,110 @@
+---
+title: Foreign Keys
+description: Define foreign key constraints to enforce referential integrity between tables.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Foreign Keys
+
+Foreign keys enforce referential integrity between tables. The Schema Builder provides a fluent chain for defining foreign key constraints.
+
+## Basic Usage
+
+```go
+bp.Foreign("user_id").References("id").On("users").OnDelete("CASCADE")
+```
+
+This creates a foreign key on the `user_id` column that references the `id` column on the `users` table. When a user is deleted, all related rows are automatically deleted (CASCADE).
+
+## The Foreign Key Chain
+
+| Method | Description |
+|--------|-------------|
+| `bp.Foreign(column)` | Start a foreign key definition on the given column |
+| `.References(column)` | The column on the referenced table |
+| `.On(table)` | The referenced table |
+| `.OnDelete(action)` | Action when the referenced row is deleted |
+
+## OnDelete Actions
+
+| Action | Behavior |
+|--------|----------|
+| `"CASCADE"` | Delete related rows when the parent is deleted |
+| `"SET NULL"` | Set the foreign key column to NULL when the parent is deleted |
+| `"RESTRICT"` | Prevent deletion of the parent if related rows exist |
+| `"NO ACTION"` | Similar to RESTRICT (database-dependent) |
+
+## Complete Example
+
+```go title="migrations/20240501_create_comments_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type CreateCommentsTable struct{}
+
+func (m *CreateCommentsTable) Up(s *schema.Builder) {
+    s.Create("comments", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.BigInteger("post_id").Unsigned()
+        bp.BigInteger("user_id").Unsigned()
+        bp.Text("body")
+        bp.Timestamp("created_at").Nullable()
+        bp.Timestamp("updated_at").Nullable()
+
+        // Delete comments when the post is deleted
+        bp.Foreign("post_id").References("id").On("posts").OnDelete("CASCADE")
+
+        // Set user_id to NULL when the user is deleted
+        bp.Foreign("user_id").References("id").On("users").OnDelete("SET NULL")
+    })
+}
+
+func (m *CreateCommentsTable) Down(s *schema.Builder) {
+    s.DropIfExists("comments")
+}
+```
+
+<Callout type="warn">
+  When using `OnDelete("SET NULL")`, the foreign key column must be `.Nullable()`. Otherwise the database will reject the constraint because it can't set a NOT NULL column to NULL.
+</Callout>
+
+## Multiple Foreign Keys
+
+A table can have multiple foreign keys:
+
+```go
+s.Create("order_items", func(bp *schema.Blueprint) {
+    bp.ID("id")
+    bp.BigInteger("order_id").Unsigned()
+    bp.BigInteger("product_id").Unsigned()
+    bp.Integer("quantity").Unsigned().Default(1)
+    bp.Decimal("price", 10, 2)
+
+    bp.Foreign("order_id").References("id").On("orders").OnDelete("CASCADE")
+    bp.Foreign("product_id").References("id").On("products").OnDelete("RESTRICT")
+})
+```
+
+## Adding Foreign Keys to Existing Tables
+
+Use `s.Alter()` to add a foreign key to an existing table:
+
+```go
+s.Alter("posts", func(bp *schema.Blueprint) {
+    bp.BigInteger("category_id").Unsigned().Nullable()
+    bp.Foreign("category_id").References("id").On("categories").OnDelete("SET NULL")
+})
+```
+
+<Callout type="info">
+  Create the referenced table before the table with the foreign key. In the example above, the `users` and `posts` tables must exist before creating the `comments` table.
+</Callout>
+
+## What's Next?
+
+- [Utility Operations](/docs/schema-builder/utility-operations) — drop, rename, and inspect tables
+- [Database Grammars](/docs/database-grammars) — how foreign keys are handled across different databases

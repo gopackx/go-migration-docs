@@ -1,0 +1,10 @@
+{
+  "title": "Package Reference",
+  "pages": [
+    "migrator",
+    "schema-builder",
+    "seeder",
+    "factory",
+    "connection-manager"
+  ]
+}

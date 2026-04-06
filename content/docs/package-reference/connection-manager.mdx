@@ -1,0 +1,243 @@
+---
+title: Connection Manager
+description: Complete package reference for the go-migration Connection Manager, Driver registration, and ConnectionConfig — all public methods with signatures, parameters, return types, and usage examples.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Connection Manager API
+
+The Connection Manager handles multiple named database connections with configurable connection pooling. It works with any `database/sql`-compatible driver.
+
+**Import path:** `github.com/gopackx/go-migration/database`
+
+For conceptual documentation, see [Connection Manager](/docs/connections/connection-manager).
+
+---
+
+## `database.NewManager()`
+
+Creates a new connection manager.
+
+```go
+func NewManager() *Manager
+```
+
+**Returns:** `*Manager`
+
+```go
+import "github.com/gopackx/go-migration/database"
+
+mgr := database.NewManager()
+defer mgr.Close()
+```
+
+---
+
+## `mgr.RegisterDriver()`
+
+Registers a database driver with the manager.
+
+```go
+func (m *Manager) RegisterDriver(name string, driver string)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | A name you assign to this driver registration |
+| `driver` | `string` | The driver name as registered with `database/sql` |
+
+```go
+import (
+    _ "github.com/lib/pq"
+    _ "github.com/go-sql-driver/mysql"
+    _ "github.com/mattn/go-sqlite3"
+)
+
+mgr.RegisterDriver("postgres", "postgres")
+mgr.RegisterDriver("mysql", "mysql")
+mgr.RegisterDriver("sqlite", "sqlite3")
+```
+
+<Callout type="info">
+  You must import the driver package with a blank identifier (`_`) so it registers itself with `database/sql` via its `init()` function.
+</Callout>
+
+See [Drivers](/docs/connections/drivers) for setup details for each database.
+
+---
+
+## `mgr.AddConnection()`
+
+Registers a named connection with its DSN and pool settings.
+
+```go
+func (m *Manager) AddConnection(name string, config ConnectionConfig)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Unique name for this connection |
+| `config` | `ConnectionConfig` | Connection configuration (driver, DSN, pool settings) |
+
+```go
+import "time"
+
+mgr.AddConnection("primary", database.ConnectionConfig{
+    Driver:          "postgres",
+    DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+    MaxOpenConns:    25,
+    MaxIdleConns:    5,
+    ConnMaxLifetime: 5 * time.Minute,
+})
+```
+
+See [Pool Configuration](/docs/connections/pool-configuration) for recommended pool values.
+
+---
+
+## `mgr.Connection()`
+
+Retrieves a `*sql.DB` instance by its registered name.
+
+```go
+func (m *Manager) Connection(name string) (*sql.DB, error)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | The name used in `AddConnection()` |
+
+**Returns:** `*sql.DB, error`
+
+The returned `*sql.DB` is a standard Go database connection — use it with any library or ORM.
+
+```go
+db, err := mgr.Connection("primary")
+if err != nil {
+    log.Fatalf("failed to get connection: %v", err)
+}
+
+rows, err := db.Query("SELECT id, name FROM users")
+```
+
+---
+
+## `mgr.Close()`
+
+Closes all managed database connections.
+
+```go
+func (m *Manager) Close() error
+```
+
+**Returns:** `error` — returns an error if any connection fails to close.
+
+```go
+if err := mgr.Close(); err != nil {
+    log.Printf("error closing connections: %v", err)
+}
+```
+
+<Callout type="warn">
+  Always call `mgr.Close()` (or use `defer mgr.Close()`) when your application exits to release database connections.
+</Callout>
+
+---
+
+## ConnectionConfig Struct
+
+Configuration for a single database connection.
+
+```go
+type ConnectionConfig struct {
+    Driver          string
+    DSN             string
+    MaxOpenConns    int
+    MaxIdleConns    int
+    ConnMaxLifetime time.Duration
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `Driver` | `string` | Name of the registered driver | (required) |
+| `DSN` | `string` | Data source name (connection string) | (required) |
+| `MaxOpenConns` | `int` | Maximum number of open connections | `0` (unlimited) |
+| `MaxIdleConns` | `int` | Maximum number of idle connections | `2` |
+| `ConnMaxLifetime` | `time.Duration` | Maximum lifetime of a connection | `0` (no limit) |
+
+These settings map directly to Go's `*sql.DB` methods: `SetMaxOpenConns()`, `SetMaxIdleConns()`, and `SetConnMaxLifetime()`.
+
+See [Pool Configuration](/docs/connections/pool-configuration) for tuning guidance.
+
+---
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "fmt"
+    "log"
+    "time"
+
+    "github.com/gopackx/go-migration/database"
+    _ "github.com/lib/pq"
+    _ "github.com/go-sql-driver/mysql"
+)
+
+func main() {
+    mgr := database.NewManager()
+    defer mgr.Close()
+
+    // Register drivers
+    mgr.RegisterDriver("postgres", "postgres")
+    mgr.RegisterDriver("mysql", "mysql")
+
+    // Add connections
+    mgr.AddConnection("primary", database.ConnectionConfig{
+        Driver:          "postgres",
+        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        MaxOpenConns:    25,
+        MaxIdleConns:    5,
+        ConnMaxLifetime: 5 * time.Minute,
+    })
+
+    mgr.AddConnection("analytics", database.ConnectionConfig{
+        Driver:          "mysql",
+        DSN:             "user:pass@tcp(localhost:3306)/analytics?parseTime=true",
+        MaxOpenConns:    10,
+        MaxIdleConns:    3,
+        ConnMaxLifetime: 5 * time.Minute,
+    })
+
+    // Use connections
+    primaryDB, err := mgr.Connection("primary")
+    if err != nil {
+        log.Fatalf("primary connection failed: %v", err)
+    }
+
+    analyticsDB, err := mgr.Connection("analytics")
+    if err != nil {
+        log.Fatalf("analytics connection failed: %v", err)
+    }
+
+    fmt.Println("Primary:", primaryDB.Stats().OpenConnections, "open")
+    fmt.Println("Analytics:", analyticsDB.Stats().OpenConnections, "open")
+}
+```
+
+---
+
+## Quick Reference
+
+| Component | Method | Signature | Description |
+|-----------|--------|-----------|-------------|
+| Manager | `NewManager` | `NewManager() *Manager` | Create a manager |
+| Manager | `RegisterDriver` | `RegisterDriver(name, driver)` | Register a database driver |
+| Manager | `AddConnection` | `AddConnection(name, config)` | Add a named connection |
+| Manager | `Connection` | `Connection(name) (*sql.DB, error)` | Get a connection by name |
+| Manager | `Close` | `Close() error` | Close all connections |
+| Config | `ConnectionConfig` | struct | Driver, DSN, and pool settings |

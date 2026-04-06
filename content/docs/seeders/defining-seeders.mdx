@@ -1,0 +1,116 @@
+---
+title: Defining Seeders
+description: Learn how to define database seeders using the Seeder interface with the Run method.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Defining Seeders
+
+Seeders in go-migration let you populate your database with test data or default records. Each seeder is a Go struct that implements the `Seeder` interface.
+
+## The Seeder Interface
+
+Every seeder must implement a single method:
+
+```go
+type Seeder interface {
+    Run(db *sql.DB) error
+}
+```
+
+| Method | Purpose |
+|--------|---------|
+| `Run(*sql.DB) error` | Executes the seeding logic — inserts rows into the database |
+
+The `Run` method receives a `*sql.DB` connection, giving you full control over how data is inserted.
+
+## Writing a Seeder
+
+Create a struct and implement the `Run` method:
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+)
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    users := []struct {
+        Name  string
+        Email string
+    }{
+        {"Alice Johnson", "alice@example.com"},
+        {"Bob Smith", "bob@example.com"},
+        {"Charlie Brown", "charlie@example.com"},
+    }
+
+    for _, u := range users {
+        _, err := db.Exec(
+            "INSERT INTO users (name, email) VALUES ($1, $2)",
+            u.Name, u.Email,
+        )
+        if err != nil {
+            return fmt.Errorf("failed to seed user %s: %w", u.Name, err)
+        }
+    }
+
+    return nil
+}
+```
+
+This seeder inserts three users into the `users` table. If any insert fails, it returns an error immediately.
+
+## Seeder Struct Conventions
+
+- Each seeder is a separate Go struct (e.g., `UserSeeder`, `PostSeeder`, `RoleSeeder`)
+- Structs are typically empty — they only need to satisfy the interface
+- Place seeder files in a dedicated `seeders/` package
+- Name files descriptively: `user_seeder.go`, `post_seeder.go`
+
+## Using Transactions
+
+For seeders that insert multiple rows, wrap the logic in a transaction to ensure atomicity:
+
+```go title="seeders/role_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+)
+
+type RoleSeeder struct{}
+
+func (s *RoleSeeder) Run(db *sql.DB) error {
+    tx, err := db.Begin()
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+
+    roles := []string{"admin", "editor", "viewer"}
+
+    for _, role := range roles {
+        _, err := tx.Exec("INSERT INTO roles (name) VALUES ($1)", role)
+        if err != nil {
+            tx.Rollback()
+            return fmt.Errorf("failed to seed role %s: %w", role, err)
+        }
+    }
+
+    return tx.Commit()
+}
+```
+
+<Callout type="info">
+  Transactions are optional but recommended when a seeder inserts multiple related rows. This ensures either all rows are inserted or none are.
+</Callout>
+
+## What's Next?
+
+- [Running Seeders](/docs/seeders/running-seeders) — how to register and execute your seeders
+- [Dependencies](/docs/seeders/dependencies) — declare execution order between seeders

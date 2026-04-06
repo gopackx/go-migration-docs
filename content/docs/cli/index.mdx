@@ -1,0 +1,702 @@
+---
+title: CLI Reference
+description: Complete command-line reference for go-migration — all commands, flags, and usage examples.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# CLI Reference
+
+go-migration includes a CLI tool for scaffolding migration files, seeder files, and factory files directly from the terminal. This page documents every available command and flag.
+
+<Callout type="info">
+  The global `go-migration` CLI handles file scaffolding (`make:migration`, `make:seeder`, `make:factory`) and the migrations tracking table. To actually run migrations, seed data, or use factories, you need a project-specific binary. See [Building Your CLI](/docs/getting-started/building-your-cli) for details.
+</Callout>
+
+## Installation
+
+Install the CLI tool:
+
+```bash
+go install github.com/gopackx/go-migration/cmd/migrator@latest
+```
+
+Verify the installation:
+
+```bash
+go-migration --help
+```
+
+## Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `init` | Scaffold a new project with directories, config file, and CLI entry point |
+| `migrate` | Run all pending migrations |
+| `migrate:rollback` | Roll back the last batch of migrations |
+| `migrate:reset` | Roll back all migrations |
+| `migrate:refresh` | Roll back all migrations then re-run them |
+| `migrate:fresh` | Drop all tables then run all migrations |
+| `migrate:status` | Show the status of each migration |
+| `migrate:install` | Create the migrations tracking table |
+| `make:migration` | Generate a new migration file |
+| `make:seeder` | Generate a new seeder file |
+| `make:factory` | Generate a new factory file |
+| `db:seed` | Run database seeders |
+| `db:seed:rollback` | Roll back a specific seeder *(new in v1.3.0)* |
+| `db:seed:truncate` | Truncate (delete all rows from) a specific table *(new in v1.3.0)* |
+
+### Smart Command Classification
+
+Commands like `version`, `help`, `init`, and all `make:*` commands skip database setup entirely. This means they work even without a valid database connection or config file — useful when scaffolding files on a fresh project.
+
+## Global Flags
+
+The `--config` flag is available on all commands:
+
+```bash
+go-migration migrate --config=./config/migration.json
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--config` | `string` | `migration.json` | Path to the configuration file |
+
+<Callout type="info">
+  Jika Anda masih menggunakan file konfigurasi YAML (`go-migration.yaml`), Anda dapat menentukannya secara eksplisit melalui flag `--config`:
+  ```bash
+  go-migration migrate --config=go-migration.yaml
+  ```
+  Perhatikan bahwa file YAML masih didukung tetapi deprecated sejak v1.4.2 — go-migration akan menampilkan peringatan deprecation di console.
+</Callout>
+
+---
+
+## init
+
+Scaffold a new go-migration project with the recommended directory structure, configuration file, and CLI entry point. This is the fastest way to get started with a new project.
+
+```bash
+go-migration init [--module=MODULE] [--force]
+```
+
+The `init` command reads your `go.mod` file to auto-detect the module path. This module path is used in the generated `cmd/migrator/main.go` for blank imports. If `go.mod` is not found or you want to use a different path, use the `--module` flag to override it.
+
+### What Gets Created
+
+**Directories:**
+
+| Directory | Purpose |
+|-----------|---------|
+| `database/migrations/` | Migration files |
+| `database/seeders/` | Seeder files |
+| `database/factories/` | Factory files |
+| `cmd/migrator/` | CLI entry point |
+
+**Files:**
+
+| File | Purpose |
+|------|---------|
+| `cmd/migrator/main.go` | Entry point that calls `migrator.Run()` with blank imports for migrations, seeders, and the database driver |
+| `migration.json` | Default configuration file in JSON format with placeholder environment variables |
+
+The generated `cmd/migrator/main.go` contains a `main()` function that calls `migrator.Run()`, along with blank imports (`_`) for your `database/migrations` and `database/seeders` packages and the database driver. This is the same pattern described in [Building Your CLI](/docs/getting-started/building-your-cli), but generated automatically.
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--module` | `string` | *(auto-detected from `go.mod`)* | Override the Go module path used in generated import statements |
+| `--force` | `bool` | `false` | Overwrite existing files instead of skipping them |
+
+### Default Behavior vs --force
+
+By default, `init` skips any files or directories that already exist and prints a warning for each skipped item. This makes it safe to run on an existing project without losing any work.
+
+With `--force`, existing files are overwritten. Use this if you want to regenerate the scaffolding from scratch.
+
+<Callout type="warn">
+  Using `--force` will overwrite existing files like `cmd/migrator/main.go` and `migration.json`. Make sure you don't have unsaved changes in those files before running with `--force`.
+</Callout>
+
+### Example Output
+
+```text
+$ go-migration init
+
+Creating project structure...
+
+  Created directories:
+    ✓ database/migrations/
+    ✓ database/seeders/
+    ✓ database/factories/
+    ✓ cmd/migrator/
+
+  Created files:
+    ✓ cmd/migrator/main.go
+    ✓ migration.json
+
+Project initialized successfully!
+Run 'go-migration make:migration create_users_table' to create your first migration.
+```
+
+### Examples
+
+```bash
+# Initialize a new project (auto-detects module path from go.mod)
+go-migration init
+
+# Initialize with a custom module path
+go-migration init --module=github.com/myuser/myproject
+
+# Re-initialize and overwrite existing files
+go-migration init --force
+```
+
+<Callout type="info">
+  `init` is a smart command — it does not require a database connection or config file to run. You can use it on a completely fresh project.
+</Callout>
+
+---
+
+## migrate
+
+Run all pending migrations that have not yet been applied to the database.
+
+```bash
+go-migration migrate [--seed]
+```
+
+Migrations are executed in the order they were registered. Each run is assigned a **batch number** so you can roll back a group of migrations together.
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--seed` | `bool` | `false` | Run all registered seeders after migrations complete |
+
+<Callout type="info">
+  The `--seed` flag is new in v1.3.0. It allows you to run all registered seeders immediately after migrations complete, combining two steps into one.
+</Callout>
+
+### Examples
+
+```bash
+# Run all pending migrations
+go-migration migrate
+
+# Run migrations then seed the database
+go-migration migrate --seed
+
+# Run with a specific config file
+go-migration migrate --config=./config/production.yaml
+```
+
+<Callout type="info">
+  If there are no pending migrations, the command exits with a message indicating nothing to migrate.
+</Callout>
+
+---
+
+## migrate:rollback
+
+Roll back the most recent batch of migrations. Use the `--step` flag to roll back a specific number of migrations.
+
+```bash
+go-migration migrate:rollback [--step=N]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--step` | `int` | `0` | Number of migrations to roll back. `0` rolls back the entire last batch. |
+
+### Examples
+
+```bash
+# Roll back the last batch
+go-migration migrate:rollback
+
+# Roll back the last 3 migrations
+go-migration migrate:rollback --step=3
+```
+
+<Callout type="warn">
+  Make sure all migrations have proper `Down` methods before rolling back. A missing or incomplete `Down` method will cause the rollback to fail.
+</Callout>
+
+---
+
+## migrate:reset
+
+Roll back **all** migrations in reverse order, returning the database to a clean state.
+
+```bash
+go-migration migrate:reset [--force]
+```
+
+This calls the `Down` method on every applied migration, starting from the most recently applied.
+
+<Callout type="warn">
+  `migrate:reset` prompts for confirmation before proceeding. Pass `--force` to skip the confirmation prompt (useful for CI/CD pipelines).
+</Callout>
+
+<Callout type="info">
+  The `--force` flag on `migrate:reset` is new in v1.3.0.
+</Callout>
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--force` | `bool` | `false` | Skip the confirmation prompt |
+
+### Examples
+
+```bash
+# Roll back all migrations (will prompt for confirmation)
+go-migration migrate:reset
+
+# Roll back all migrations without confirmation
+go-migration migrate:reset --force
+
+# Roll back all migrations with a specific config
+go-migration migrate:reset --config=./config/staging.yaml
+```
+
+---
+
+## migrate:refresh
+
+Roll back all migrations and then re-run them. This is equivalent to running `migrate:reset` followed by `migrate`.
+
+```bash
+go-migration migrate:refresh [--seed]
+```
+
+Useful during development when you want to rebuild the entire database schema from scratch while keeping your migration files intact.
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--seed` | `bool` | `false` | Run all registered seeders after migrations complete |
+
+<Callout type="info">
+  The `--seed` flag on `migrate:refresh` is new in v1.3.0.
+</Callout>
+
+### Examples
+
+```bash
+# Refresh all migrations
+go-migration migrate:refresh
+
+# Refresh and seed
+go-migration migrate:refresh --seed
+
+# Refresh with a specific config
+go-migration migrate:refresh --config=./config/development.yaml
+```
+
+---
+
+## migrate:fresh
+
+Drop **all tables** from the database, then run all migrations from the beginning.
+
+```bash
+go-migration migrate:fresh [--force] [--seed]
+```
+
+Unlike `migrate:refresh`, this command does not call `Down` methods. It drops every table directly, then runs all `Up` methods.
+
+<Callout type="warn">
+  `migrate:fresh` prompts for confirmation before proceeding. Pass `--force` to skip the confirmation prompt (useful for CI/CD pipelines).
+</Callout>
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--force` | `bool` | `false` | Skip the confirmation prompt |
+| `--seed` | `bool` | `false` | Run all registered seeders after migrations complete |
+
+### Examples
+
+```bash
+# Drop all tables and re-migrate (will prompt for confirmation)
+go-migration migrate:fresh
+
+# Drop all tables without confirmation
+go-migration migrate:fresh --force
+
+# Fresh migration then seed
+go-migration migrate:fresh --seed
+
+# Fresh migration with a specific config
+go-migration migrate:fresh --config=./config/test.yaml
+```
+
+<Callout type="error">
+  `migrate:fresh` drops all tables without running `Down` methods. This will destroy all data. Never use this in production.
+</Callout>
+
+---
+
+## migrate:status
+
+Display the current status of all registered migrations, showing which have been run and which are pending.
+
+```bash
+go-migration migrate:status
+```
+
+### Example Output
+
+```
++------+----------------------------------------+-------+
+| Ran? | Migration                              | Batch |
++------+----------------------------------------+-------+
+| Yes  | 20240101_000001_create_users_table      | 1     |
+| Yes  | 20240115_000001_create_posts_table      | 1     |
+| Yes  | 20240201_000001_add_phone_to_users      | 2     |
+| No   | 20240301_000001_create_comments_table   |       |
++------+----------------------------------------+-------+
+```
+
+### Examples
+
+```bash
+# Show migration status
+go-migration migrate:status
+
+# Show status using a specific config
+go-migration migrate:status --config=./config/production.yaml
+```
+
+---
+
+## migrate:install
+
+Create the migrations tracking table in the database. This table stores which migrations have been run and their batch numbers.
+
+```bash
+go-migration migrate:install
+```
+
+<Callout type="info">
+  You typically don't need to run this manually. The `migrate` command creates the tracking table automatically if it doesn't exist.
+</Callout>
+
+### Examples
+
+```bash
+# Create the migrations table
+go-migration migrate:install
+
+# Create with a specific config
+go-migration migrate:install --config=./config/migration.json
+```
+
+---
+
+## make:migration
+
+Generate a new migration file with boilerplate code. Use `--create` for new table migrations or `--table` for table modification migrations.
+
+```bash
+go-migration make:migration <name> [--create=TABLE] [--table=TABLE]
+```
+
+### Flags
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--create` | `string` | Generate a migration that creates a new table with the given name |
+| `--table` | `string` | Generate a migration that modifies an existing table with the given name |
+
+### Examples
+
+```bash
+# Generate a blank migration
+go-migration make:migration create_users_table
+
+# Generate a migration to create a new "users" table
+go-migration make:migration create_users_table --create=users
+
+# Generate a migration to modify the "users" table
+go-migration make:migration add_email_to_users --table=users
+```
+
+### Generated File: --create
+
+When using `--create=users`, the generated file includes `s.Create()` scaffolding:
+
+```go title="migrations/20240101_000001_create_users_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type CreateUsersTable struct{}
+
+func (m *CreateUsersTable) Up(s *schema.Builder) {
+    s.Create("users", func(bp *schema.Blueprint) {
+        bp.ID()
+        // Add columns here
+        bp.Timestamps()
+    })
+}
+
+func (m *CreateUsersTable) Down(s *schema.Builder) {
+    s.DropIfExists("users")
+}
+```
+
+### Generated File: --table
+
+When using `--table=users`, the generated file includes `s.Alter()` scaffolding:
+
+```go title="migrations/20240201_000001_add_email_to_users.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type AddEmailToUsers struct{}
+
+func (m *AddEmailToUsers) Up(s *schema.Builder) {
+    s.Alter("users", func(bp *schema.Blueprint) {
+        // Add or modify columns here
+    })
+}
+
+func (m *AddEmailToUsers) Down(s *schema.Builder) {
+    s.Alter("users", func(bp *schema.Blueprint) {
+        // Reverse the changes here
+    })
+}
+```
+
+---
+
+## make:seeder
+
+Generate a new seeder file with boilerplate code.
+
+```bash
+go-migration make:seeder <name> [--class=CLASS]
+```
+
+### Flags
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--class` | `string` | The struct name for the seeder (defaults to the provided name in PascalCase) |
+
+### Examples
+
+```bash
+# Generate a seeder file
+go-migration make:seeder users
+
+# Generate with a custom struct name
+go-migration make:seeder users --class=UserSeeder
+```
+
+### Generated File
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+)
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    // Seed logic here
+    return nil
+}
+```
+
+---
+
+## make:factory
+
+Generate a new factory file with boilerplate code for model factories with faker integration.
+
+```bash
+go-migration make:factory <name>
+```
+
+### Examples
+
+```bash
+# Generate a factory file
+go-migration make:factory users
+
+# Generate a factory for a specific model
+go-migration make:factory user_profile
+```
+
+### Generated File
+
+```go title="factories/users_factory.go"
+package factories
+
+import (
+    "github.com/gopackx/go-migration/seeder/factory"
+)
+
+// Users model.
+type Users struct {
+    // TODO: define model fields
+}
+
+// NewUsersFactory creates a factory for Users.
+func NewUsersFactory() *factory.Factory[Users] {
+    return factory.NewFactory(func(f factory.Faker) Users {
+        return Users{
+            // TODO: set fields using faker
+        }
+    })
+}
+```
+
+---
+
+## db:seed
+
+Run database seeders to populate the database with data. By default, all registered seeders are executed. Use `--class` to run a specific seeder, or `--tag` to run seeders matching a tag.
+
+```bash
+go-migration db:seed [--class=CLASS] [--tag=TAG]
+```
+
+### Flags
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--class` | `string` | Run only the specified seeder by name |
+| `--tag` | `string` | Run only seeders matching the given tag |
+
+<Callout type="info">
+  The `--tag` flag is new in v1.3.0. It runs only seeders that implement the `TaggedSeeder` interface and return the matching tag. See [Seeder Tags](/docs/seeders/tags) for details.
+</Callout>
+
+### Examples
+
+```bash
+# Run all seeders
+go-migration db:seed
+
+# Run a specific seeder
+go-migration db:seed --class=UserSeeder
+
+# Run seeders tagged as "development"
+go-migration db:seed --tag=development
+
+# Run with a specific config
+go-migration db:seed --config=./config/development.yaml
+```
+
+<Callout type="info">
+  Seeders run in dependency order when using `DependsOn()`. See [Seeder Dependencies](/docs/seeders/dependencies) for details.
+</Callout>
+
+---
+
+## db:seed:rollback
+
+<Callout type="info">
+  New in v1.3.0
+</Callout>
+
+Roll back a specific seeder by calling its `Rollback` method. The seeder must implement the `RollbackableSeeder` interface.
+
+```bash
+go-migration db:seed:rollback --class=CLASS
+```
+
+### Flags
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--class` | `string` | **(Required)** The seeder name to roll back |
+
+### Examples
+
+```bash
+# Roll back a specific seeder
+go-migration db:seed:rollback --class=UserSeeder
+
+# Roll back with a specific config
+go-migration db:seed:rollback --class=UserSeeder --config=./config/development.yaml
+```
+
+<Callout type="warn">
+  The seeder must implement the `RollbackableSeeder` interface. If it doesn't, the command returns an error. See [Seeder Rollback](/docs/seeders/rollback) for details.
+</Callout>
+
+---
+
+## db:seed:truncate
+
+<Callout type="info">
+  New in v1.3.0
+</Callout>
+
+Delete all rows from a specific table. This is useful for clearing seeded data without dropping the table itself.
+
+```bash
+go-migration db:seed:truncate --table=TABLE
+```
+
+### Flags
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--table` | `string` | **(Required)** The table name to truncate |
+
+### Examples
+
+```bash
+# Truncate the users table
+go-migration db:seed:truncate --table=users
+
+# Truncate with a specific config
+go-migration db:seed:truncate --table=posts --config=./config/development.yaml
+```
+
+<Callout type="warn">
+  This deletes all rows from the table using `DELETE FROM`. The table structure and schema remain intact.
+</Callout>
+
+---
+
+## Flags Reference
+
+| Flag | Commands | Type | Description |
+|------|----------|------|-------------|
+| `--step` | `migrate:rollback` | `int` | Number of migrations to roll back |
+| `--module` | `init` | `string` | Override the Go module path used in generated imports |
+| `--force` | `init`, `migrate:fresh`, `migrate:reset` | `bool` | Overwrite existing files (`init`) or skip confirmation prompt (`migrate:fresh`, `migrate:reset`) |
+| `--seed` | `migrate`, `migrate:fresh`, `migrate:refresh` | `bool` | Run seeders after migrations complete |
+| `--create` | `make:migration` | `string` | Table name for a create-table migration |
+| `--table` | `make:migration`, `db:seed:truncate` | `string` | Table name for migration modification or truncation |
+| `--class` | `make:seeder`, `db:seed`, `db:seed:rollback` | `string` | Seeder struct name |
+| `--tag` | `db:seed` | `string` | Run seeders matching the given tag |
+| (positional) | `make:factory` | `string` | Factory name (required) |
+| `--config` | All commands | `string` | Path to the configuration file |
+
+## What's Next?
+
+- [Configuration](/docs/configuration) — set up database connections with YAML, JSON, or environment variables
+- [Getting Started](/docs/getting-started) — install go-migration and run your first migration
+- [Migrations](/docs/migrations/defining-migrations) — learn how to define and manage migrations

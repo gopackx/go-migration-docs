@@ -1,0 +1,494 @@
+---
+title: Configuration
+description: Configure go-migration using YAML, JSON, or environment variables — complete reference with all supported fields and default values.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Configuration
+
+go-migration supports configuration through **YAML files**, **JSON files**, and **environment variables**. When using `migrator.Run()`, the config file defaults to `migration.json` in the current directory. You can also specify a path with the `--config` flag.
+
+```bash
+# Uses migration.json in the current directory (default)
+go-migration migrate
+
+# Specify a custom config file
+go-migration migrate --config=./config/production.json
+go-migration migrate --config=./config/go-migration.yaml
+```
+
+<Callout type="warn">
+  **Perubahan nama file konfigurasi:** Nama file konfigurasi default telah berubah beberapa kali: `migration.yaml` / `database.yaml` → `go-migration.yaml` (v1.4.0) → `migration.json` (v1.4.2). Sejak v1.4.2, `migration.json` adalah default. File YAML (`go-migration.yaml`, `migration.yaml`, `database.yaml`) masih didukung melalui flag `--config`, tetapi saat file YAML dimuat, go-migration menampilkan peringatan deprecation di console.
+</Callout>
+
+## Configuration File
+
+The configuration file defines your database connection, pool settings, migration table name, and logging preferences.
+
+<Tabs items={["JSON", "YAML (Deprecated)"]}>
+  <Tab value="JSON">
+    Create a `migration.json` file in your project root:
+
+    ```json title="migration.json"
+    {
+      "driver": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "database": "myapp",
+      "username": "dbuser",
+      "password": "dbpass",
+      "sslmode": "disable",
+      "max_open_conns": 25,
+      "max_idle_conns": 5,
+      "conn_max_lifetime": 300,
+      "migration_table": "migrations",
+      "log_level": "info"
+    }
+    ```
+  </Tab>
+  <Tab value="YAML (Deprecated)">
+    Create a `go-migration.yaml` file in your project root:
+
+    ```yaml title="go-migration.yaml"
+    # Database driver: postgres, mysql, or sqlite
+    driver: postgres
+
+    # Connection details
+    host: localhost
+    port: 5432
+    database: myapp
+    username: dbuser
+    password: dbpass
+
+    # SSL mode (PostgreSQL only)
+    sslmode: disable
+
+    # Connection pool settings
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: 300 # seconds
+
+    # Migration settings
+    migration_table: migrations
+
+    # Logging
+    log_level: info
+    ```
+  </Tab>
+</Tabs>
+
+## Supported Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `default` | `string` | No | Name of the default connection to use (see [Multi-Connection Configuration](#multi-connection-configuration)) |
+| `connections` | `map` | No | Map of named database connections (see [Multi-Connection Configuration](#multi-connection-configuration)) |
+| `driver` | `string` | Yes | Database driver — `postgres`, `mysql`, or `sqlite` |
+| `host` | `string` | Yes | Database server hostname or IP address |
+| `port` | `int` | Yes | Database server port |
+| `database` | `string` | Yes | Database name (or file path for SQLite) |
+| `username` | `string` | Yes | Database user |
+| `password` | `string` | Yes | Database password |
+| `sslmode` | `string` | No | SSL mode for PostgreSQL (`disable`, `require`, `verify-ca`, `verify-full`) |
+| `max_open_conns` | `int` | No | Maximum number of open connections |
+| `max_idle_conns` | `int` | No | Maximum number of idle connections in the pool |
+| `conn_max_lifetime` | `int` | No | Maximum connection lifetime in seconds |
+| `migration_table` | `string` | No | Name of the migrations tracking table |
+| `migration_dir` | `string` | No | Directory for migration files (default: `database/migrations`) |
+| `seeder_dir` | `string` | No | Directory for seeder files (default: `database/seeders`) |
+| `factory_dir` | `string` | No | Directory for factory files (default: `database/factories`) |
+| `log_level` | `string` | No | Logging verbosity — `debug`, `info`, `warn`, `error` |
+
+## Environment Variable Fallback
+
+go-migration checks for environment variables when a field is not set in the configuration file. This lets you keep secrets out of config files and override settings per environment.
+
+### Naming Convention
+
+Environment variables use uppercase names with a `DB_` prefix for connection fields:
+
+| Config Field | Environment Variable |
+|-------------|---------------------|
+| `host` | `DB_HOST` |
+| `port` | `DB_PORT` |
+| `database` | `DB_NAME` |
+| `username` | `DB_USER` |
+| `password` | `DB_PASSWORD` |
+| `driver` | `DB_DRIVER` |
+| `sslmode` | `DB_SSLMODE` |
+
+### Directory Settings
+
+go-migration also supports environment variables for directory configuration with the `GOMIGRATE_` prefix:
+
+| Config Field | Environment Variable | Default |
+|-------------|---------------------|---------|
+| `migration_dir` | `GOMIGRATE_MIGRATION_DIR` | `database/migrations` |
+| `seeder_dir` | `GOMIGRATE_SEEDER_DIR` | `database/seeders` |
+| `factory_dir` | `GOMIGRATE_FACTORY_DIR` | `database/factories` |
+| `migration_table` | `GOMIGRATE_MIGRATION_TABLE` | `migrations` |
+| `log_level` | `GOMIGRATE_LOG_LEVEL` | `info` |
+| `log_output` | `GOMIGRATE_LOG_OUTPUT` | `console` |
+
+### Resolution Order
+
+For each field, go-migration resolves the value in this order:
+
+1. **Configuration file** — value from YAML or JSON
+2. **Environment variable** — fallback if the config field is empty or missing
+3. **Default value** — built-in default if neither is set (for optional fields)
+
+```bash
+# Set environment variables for production
+export DB_HOST=prod-db.example.com
+export DB_PORT=5432
+export DB_NAME=myapp_production
+export DB_USER=app_user
+export DB_PASSWORD=s3cret
+```
+
+<Callout type="info">
+  Environment variables only apply as fallbacks. If a value is explicitly set in the configuration file, the environment variable is ignored for that field.
+</Callout>
+
+### Minimal Config with Environment Variables
+
+You can use a minimal configuration file and let environment variables handle the sensitive values:
+
+<Tabs items={["JSON", "YAML (Deprecated)"]}>
+  <Tab value="JSON">
+    ```json title="migration.json"
+    {
+      "driver": "postgres",
+      "sslmode": "require",
+      "migration_table": "schema_migrations",
+      "log_level": "info"
+    }
+    ```
+  </Tab>
+  <Tab value="YAML (Deprecated)">
+    ```yaml title="go-migration.yaml"
+    driver: postgres
+    sslmode: require
+    migration_table: schema_migrations
+    log_level: info
+    # host, port, database, username, password
+    # resolved from DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="warn">
+  Avoid committing passwords and secrets to version control. Use environment variables or a `.env` file (excluded from git) for sensitive values.
+</Callout>
+
+## Default Values
+
+Optional settings use these defaults when not specified in the config file or environment:
+
+| Setting | Default Value | Description |
+|---------|---------------|-------------|
+| `migration_table` | `migrations` | Name of the table that tracks applied migrations |
+| `migration_dir` | `database/migrations` | Directory for migration files |
+| `seeder_dir` | `database/seeders` | Directory for seeder files |
+| `factory_dir` | `database/factories` | Directory for factory files |
+| `max_open_conns` | `0` (unlimited) | Maximum open database connections |
+| `max_idle_conns` | `2` | Maximum idle connections in the pool |
+| `conn_max_lifetime` | `0` (no limit) | Maximum connection lifetime in seconds |
+| `log_level` | `info` | Logging verbosity level |
+| `sslmode` | `disable` | SSL mode for PostgreSQL connections |
+
+<Callout type="info">
+  Pool settings map directly to Go's `*sql.DB` methods. See [Pool Configuration](/docs/connections/pool-configuration) for tuning recommendations based on your workload.
+</Callout>
+
+## Driver-Specific Examples
+
+<Tabs items={["PostgreSQL", "MySQL", "SQLite"]}>
+  <Tab value="PostgreSQL">
+    ```yaml title="go-migration.yaml"
+    driver: postgres
+    host: localhost
+    port: 5432
+    database: myapp
+    username: postgres
+    password: secret
+    sslmode: disable
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: 300
+    migration_table: migrations
+    log_level: info
+    ```
+  </Tab>
+  <Tab value="MySQL">
+    ```yaml title="go-migration.yaml"
+    driver: mysql
+    host: localhost
+    port: 3306
+    database: myapp
+    username: root
+    password: secret
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: 300
+    migration_table: migrations
+    log_level: info
+    ```
+  </Tab>
+  <Tab value="SQLite">
+    ```yaml title="go-migration.yaml"
+    driver: sqlite
+    database: ./data/myapp.db
+    migration_table: migrations
+    log_level: info
+    ```
+
+    <Callout type="info">
+      SQLite uses the `database` field as the file path. The `host`, `port`, `username`, and `password` fields are not required.
+    </Callout>
+  </Tab>
+</Tabs>
+
+## Multi-Connection Configuration
+
+<Callout type="info">
+  New in v1.4.0 — the configuration file now supports a `default` field and a `connections` map for managing multiple database connections.
+</Callout>
+
+The `default` field specifies which connection is used when no specific connection is requested. The `connections` field is a map of named database connections, where each key is a connection name and the value contains the connection settings.
+
+Directory and table settings (`migration_dir`, `seeder_dir`, `factory_dir`, `migration_table`, `log_level`) are defined at the top level and apply globally across all connections.
+
+<Tabs items={["JSON", "YAML (Deprecated)"]}>
+  <Tab value="JSON">
+    ```json title="migration.json"
+    {
+      "default": "postgres",
+      "connections": {
+        "postgres": {
+          "driver": "postgres",
+          "host": "${DB_HOST}",
+          "port": 5432,
+          "database": "${DB_DATABASE}",
+          "username": "${DB_USERNAME}",
+          "password": "${DB_PASSWORD}",
+          "sslmode": "disable"
+        },
+        "mysql": {
+          "driver": "mysql",
+          "host": "${MYSQL_HOST}",
+          "port": 3306,
+          "database": "${MYSQL_DATABASE}",
+          "username": "${MYSQL_USERNAME}",
+          "password": "${MYSQL_PASSWORD}"
+        }
+      },
+      "migration_dir": "database/migrations",
+      "seeder_dir": "database/seeders",
+      "factory_dir": "database/factories",
+      "migration_table": "migrations",
+      "log_level": "info"
+    }
+    ```
+  </Tab>
+  <Tab value="YAML (Deprecated)">
+    ```yaml title="go-migration.yaml"
+    # Default connection name
+    default: postgres
+
+    # Multiple database connections
+    connections:
+      postgres:
+        driver: postgres
+        host: ${DB_HOST}
+        port: 5432
+        database: ${DB_DATABASE}
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+        sslmode: disable
+
+      mysql:
+        driver: mysql
+        host: ${MYSQL_HOST}
+        port: 3306
+        database: ${MYSQL_DATABASE}
+        username: ${MYSQL_USERNAME}
+        password: ${MYSQL_PASSWORD}
+
+    # Directory and settings (apply globally)
+    migration_dir: database/migrations
+    seeder_dir: database/seeders
+    factory_dir: database/factories
+    migration_table: migrations
+    log_level: info
+    ```
+  </Tab>
+</Tabs>
+
+When using the `--config` flag, the multi-connection structure works the same way:
+
+```bash
+go-migration migrate --config=./config/migration.json
+```
+
+<Callout type="info">
+  The flat configuration format (without `default` and `connections`) is still supported. If `connections` is not present, go-migration treats the top-level fields as a single connection — no changes needed for existing config files.
+</Callout>
+
+## Environment Variable Interpolation
+
+You can embed environment variable references directly in your YAML or JSON config values using `${VAR_NAME}` placeholders. This is different from the environment variable fallback — interpolation lets you compose values from multiple environment variables.
+
+```yaml title="go-migration.yaml"
+driver: postgres
+host: ${DB_HOST}
+port: 5432
+database: ${DB_NAME}
+username: ${DB_USER}
+password: ${DB_PASSWORD}
+sslmode: ${DB_SSLMODE}
+log_level: info
+```
+
+### How It Works
+
+Interpolation happens after reading the file and before YAML/JSON parsing:
+
+1. go-migration reads the raw config file content
+2. All `${VAR_NAME}` placeholders are replaced with the corresponding environment variable values
+3. The resulting string is then parsed as YAML or JSON
+
+### Auto-Unquote for JSON (v1.5.0)
+
+When using JSON config files, `InterpolateEnv` automatically removes surrounding quotes for values that resolve to numeric, boolean (`true`/`false`), or `null` types. This means your JSON stays valid with correct types after interpolation.
+
+```json title="migration.json"
+{
+  "driver": "postgres",
+  "host": "${DB_HOST}",
+  "port": "${DB_PORT}",
+  "database": "${DB_NAME}",
+  "sslmode": "disable"
+}
+```
+
+With `DB_HOST=localhost`, `DB_PORT=5432`, and `DB_NAME=myapp`, the result after interpolation is:
+
+```json
+{
+  "driver": "postgres",
+  "host": "localhost",
+  "port": 5432,
+  "database": "myapp",
+  "sslmode": "disable"
+}
+```
+
+Notice that `"port": "${DB_PORT}"` becomes `"port": 5432` (a number, not the string `"5432"`). The same applies to boolean and null values:
+
+| Environment Variable | JSON Before | JSON After |
+|---------------------|-------------|------------|
+| `DB_PORT=5432` | `"port": "${DB_PORT}"` | `"port": 5432` |
+| `ENABLE_SSL=true` | `"ssl": "${ENABLE_SSL}"` | `"ssl": true` |
+| `EXTRA=null` | `"extra": "${EXTRA}"` | `"extra": null` |
+| `DB_HOST=localhost` | `"host": "${DB_HOST}"` | `"host": "localhost"` |
+
+<Callout type="info">
+  Auto-unquote hanya berlaku untuk file JSON. Pada file YAML, tipe data sudah ditangani secara native oleh parser YAML sehingga tidak perlu unquote.
+</Callout>
+
+### Escaping
+
+To produce a literal `${VAR_NAME}` in your config (without interpolation), use the double-dollar escape sequence:
+
+```yaml title="go-migration.yaml"
+# This resolves to the value of DB_HOST
+host: ${DB_HOST}
+
+# This produces the literal string "${NOT_REPLACED}"
+some_field: $${NOT_REPLACED}
+```
+
+### Missing Variables
+
+If any `${VAR_NAME}` references an environment variable that is not set, go-migration returns an error listing all unresolved variables. This prevents silent misconfiguration.
+
+<Callout type="warn">
+  All unresolved `${VAR_NAME}` placeholders are reported in a single error message, so you can fix them all at once rather than one at a time.
+</Callout>
+
+## Config Validation
+
+go-migration validates your configuration at load time and reports all violations in a single error. This catches common mistakes before any database operations are attempted.
+
+### Validated Fields
+
+| Field | Rule |
+|-------|------|
+| `driver` | Must be `postgres`, `mysql`, or `sqlite` |
+| `port` | Must be a positive number when specified |
+| `log_level` | Must be `debug`, `info`, `warn`, or `error` |
+| `log_output` | Must be `console`, `file`, or `both` |
+| `max_open_conns` | Must be non-negative |
+| `max_idle_conns` | Must be non-negative |
+
+### Example Error
+
+If multiple fields are invalid, you get a single error with all violations:
+
+```
+config validation failed:
+  - driver must be one of: postgres, mysql, sqlite (got "mongo")
+  - port must be positive (got -1)
+  - log_level must be one of: debug, info, warn, error (got "verbose")
+```
+
+<Callout type="info">
+  Validation runs after environment variable interpolation and fallback resolution, so the final resolved values are what gets validated.
+</Callout>
+
+## Programmatic Usage
+
+The config package is publicly available at `config/`, so you can import it directly in your own Go projects — no need to reimplement config loading, validation, or environment variable interpolation.
+
+```go title="main.go"
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/gopackx/go-migration/config"
+)
+
+func main() {
+	// Load configuration from a YAML or JSON file
+	cfg, err := config.Load("migration.json")
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+
+	// Apply default values for optional fields
+	cfg.ApplyDefaults()
+
+	// Validate the resolved configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid config: %v", err)
+	}
+
+	fmt.Printf("Connected to %s on %s:%d\n", cfg.Database, cfg.Host, cfg.Port)
+}
+```
+
+<Callout type="info">
+  `config.Load()` handles file reading, YAML/JSON parsing, and environment variable interpolation (`${VAR_NAME}`) in a single call. Follow it with `ApplyDefaults()` and `Validate()` for a fully resolved and validated configuration.
+</Callout>
+
+## What's Next?
+
+- [Framework Integration](/docs/framework-integration/gin) — use go-migration with Gin, Echo, Fiber, or net/http
+- [CLI Reference](/docs/cli) — run migrations from the command line
+- [Error Handling](/docs/error-handling) — diagnose and handle migration errors

@@ -1,0 +1,96 @@
+---
+title: Transactions
+description: Understand how go-migration wraps each migration in a transaction and how to opt out.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Transactions
+
+By default, go-migration wraps each migration in a database transaction. If a migration fails, the transaction is rolled back so your database isn't left in a partially-migrated state.
+
+## Default Behavior
+
+When `m.Up()` runs a migration, it:
+
+1. Begins a transaction
+2. Calls the migration's `Up` method
+3. Records the migration in the tracking table
+4. Commits the transaction
+
+If the `Up` method returns an error or panics, the transaction is rolled back. The migration is not recorded, and subsequent migrations in the batch are not executed.
+
+```go
+// Each migration runs in its own transaction automatically
+if err := m.Up(); err != nil {
+    // The failed migration was rolled back
+    // Previously successful migrations in this batch remain applied
+    log.Fatal(err)
+}
+```
+
+<Callout type="info">
+  Each migration gets its own transaction. If migration A succeeds but migration B fails, A remains applied and B is rolled back.
+</Callout>
+
+## Disabling Transactions
+
+Some database operations cannot run inside a transaction (for example, `CREATE INDEX CONCURRENTLY` in PostgreSQL). For these cases, implement the `DisableTransaction()` method on your migration struct:
+
+```go title="migrations/20240301_add_index_concurrently.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type AddIndexConcurrently struct{}
+
+func (m *AddIndexConcurrently) Up(s *schema.Builder) {
+    // This runs outside a transaction
+    s.Alter("users", func(bp *schema.Blueprint) {
+        bp.Index("idx_users_email", "email")
+    })
+}
+
+func (m *AddIndexConcurrently) Down(s *schema.Builder) {
+    s.Alter("users", func(bp *schema.Blueprint) {
+        bp.DropIndex("idx_users_email")
+    })
+}
+
+// DisableTransaction opts this migration out of transaction wrapping
+func (m *AddIndexConcurrently) DisableTransaction() {}
+```
+
+When go-migration detects that a migration struct implements `DisableTransaction()`, it skips the transaction wrapper and executes the migration directly.
+
+<Callout type="warn">
+  Migrations that run without transactions cannot be automatically rolled back on failure. If the migration fails partway through, you may need to manually clean up. Use this only when necessary.
+</Callout>
+
+## The `DisableTransaction` Interface
+
+The opt-out is detected via interface satisfaction:
+
+```go
+type TransactionDisabler interface {
+    DisableTransaction()
+}
+```
+
+Any migration struct that implements this method (even with an empty body) will run outside a transaction.
+
+## When to Disable Transactions
+
+Common scenarios where you might need to disable transactions:
+
+- Creating indexes concurrently (PostgreSQL)
+- Altering enum types (PostgreSQL)
+- Operations that require implicit commits (MySQL DDL)
+- Long-running data migrations that exceed transaction timeout limits
+
+## What's Next?
+
+- [Running Migrations](/docs/migrations/running-migrations) — how `m.Up()` executes migrations
+- [Rollback](/docs/migrations/rollback) — undo migrations when something goes wrong

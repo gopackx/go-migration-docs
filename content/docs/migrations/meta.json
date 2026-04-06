@@ -1,0 +1,13 @@
+{
+  "title": "Migrations",
+  "pages": [
+    "defining-migrations",
+    "registering-migrations",
+    "running-migrations",
+    "batch-tracking",
+    "rollback",
+    "reset-refresh-fresh",
+    "migration-status",
+    "transactions"
+  ]
+}

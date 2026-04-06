@@ -1,0 +1,127 @@
+---
+title: Faker Methods
+description: Reference table of all available Faker methods for generating realistic test data in factories.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Faker Methods
+
+The `factory.Faker` instance passed to your factory builder provides methods for generating a wide range of realistic random data. Each call produces a new random value.
+
+## Method Reference
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `f.Name()` | `string` | Full person name (e.g., "Alice Johnson") |
+| `f.FirstName()` | `string` | First name (e.g., "Alice") |
+| `f.LastName()` | `string` | Last name (e.g., "Johnson") |
+| `f.Email()` | `string` | Email address (e.g., "alice@example.com") |
+| `f.Phone()` | `string` | Phone number |
+| `f.Address()` | `string` | Full street address |
+| `f.City()` | `string` | Random city name |
+| `f.Country()` | `string` | Random country name |
+| `f.UUID()` | `string` | Random UUID v4 string |
+| `f.Sentence()` | `string` | Random sentence of text |
+| `f.Paragraph()` | `string` | Random paragraph of text |
+| `f.Word()` | `string` | Random single word |
+| `f.Bool()` | `bool` | Random boolean value |
+| `f.IntBetween(min, max)` | `int` | Random integer in range `[min, max]` |
+| `f.Float64Between(min, max)` | `float64` | Random float in range `[min, max)` |
+| `f.Date()` | `time.Time` | Random date |
+| `f.DateBetween(start, end)` | `time.Time` | Random date between start and end |
+| `f.Pick(items)` | `string` | Random element from a string slice |
+
+## Usage Examples
+
+### Personal Information
+
+```go
+factory.NewFactory(func(f factory.Faker) Contact {
+    return Contact{
+        Name:    f.Name(),
+        Email:   f.Email(),
+        Phone:   f.Phone(),
+        Address: f.Address(),
+    }
+})
+```
+
+### Numeric Values
+
+```go
+factory.NewFactory(func(f factory.Faker) Product {
+    return Product{
+        Price:    f.Float64Between(1.00, 999.99),
+        Stock:    f.IntBetween(0, 500),
+        Rating:   f.Float64Between(1.0, 5.0),
+    }
+})
+```
+
+### Text Content
+
+```go
+factory.NewFactory(func(f factory.Faker) Article {
+    return Article{
+        Title:   f.Sentence(),
+        Body:    f.Paragraph(),
+        Slug:    f.UUID(),
+    }
+})
+```
+
+### Identifiers and Booleans
+
+```go
+factory.NewFactory(func(f factory.Faker) Account {
+    return Account{
+        ExternalID: f.UUID(),
+        Active:     f.Bool(),
+        CreatedAt:  f.Date(),
+    }
+})
+```
+
+<Callout type="info">
+  Every call to a Faker method produces a new random value. Two calls to `f.Name()` within the same builder will return different names.
+</Callout>
+
+## Complete Example
+
+```go title="factories/order_factory.go"
+package factories
+
+import (
+    "time"
+
+    "github.com/gopackx/go-migration/seeder/factory"
+)
+
+type Order struct {
+    ID        string
+    Customer  string
+    Email     string
+    Total     float64
+    Items     int
+    Shipped   bool
+    CreatedAt time.Time
+}
+
+var OrderFactory = factory.NewFactory(func(f factory.Faker) Order {
+    return Order{
+        ID:        f.UUID(),
+        Customer:  f.Name(),
+        Email:     f.Email(),
+        Total:     f.Float64Between(10.00, 500.00),
+        Items:     f.IntBetween(1, 20),
+        Shipped:   f.Bool(),
+        CreatedAt: f.Date(),
+    }
+})
+```
+
+## What's Next?
+
+- [Named States](/docs/factories/named-states) — define factory variants with state overrides
+- [Make and MakeMany](/docs/factories/make-and-make-many) — generate single or batch instances

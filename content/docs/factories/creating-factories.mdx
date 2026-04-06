@@ -1,0 +1,135 @@
+---
+title: Creating Factories
+description: Define reusable test data factories using the generic Factory[T] pattern with factory.NewFactory().
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Creating Factories
+
+Factories let you generate realistic test data for your Go structs. go-migration provides a generic `Factory[T]` that works with any struct type, powered by a built-in Faker for generating random values.
+
+## The Factory Pattern
+
+You can scaffold a new factory file using the CLI:
+
+```bash
+go-migration make:factory users
+```
+
+This generates `factories/users_factory.go` with the correct package, imports, and struct boilerplate ready to fill in.
+
+### Manual Definition
+
+A factory is created with `factory.NewFactory()`, passing a builder function that receives a `factory.Faker` and returns an instance of your struct:
+
+```go
+factory.NewFactory(func(f factory.Faker) T) *Factory[T]
+```
+
+| Component | Purpose |
+|-----------|---------|
+| `Factory[T]` | Generic factory bound to struct type `T` |
+| `factory.NewFactory()` | Creates a new factory with a builder function |
+| `factory.Faker` | Provides methods for generating random data |
+
+## Defining a Factory
+
+Create a factory by specifying the struct type and a builder function:
+
+```go title="factories/user_factory.go"
+package factories
+
+import (
+    "github.com/gopackx/go-migration/seeder/factory"
+)
+
+type User struct {
+    ID    int
+    Name  string
+    Email string
+    Age   int
+}
+
+var UserFactory = factory.NewFactory(func(f factory.Faker) User {
+    return User{
+        ID:    f.IntBetween(1, 10000),
+        Name:  f.Name(),
+        Email: f.Email(),
+        Age:   f.IntBetween(18, 65),
+    }
+})
+```
+
+The builder function is called each time you generate an instance, producing unique random values on every call.
+
+## Multiple Factories
+
+Define as many factories as you need — one per struct type:
+
+```go title="factories/post_factory.go"
+package factories
+
+import (
+    "github.com/gopackx/go-migration/seeder/factory"
+)
+
+type Post struct {
+    ID     int
+    Title  string
+    Body   string
+    UserID int
+}
+
+var PostFactory = factory.NewFactory(func(f factory.Faker) Post {
+    return Post{
+        ID:     f.IntBetween(1, 10000),
+        Title:  f.Sentence(),
+        Body:   f.Paragraph(),
+        UserID: f.IntBetween(1, 100),
+    }
+})
+```
+
+<Callout type="info">
+  Factories are typically defined as package-level variables so they can be reused across tests and seeders.
+</Callout>
+
+## Using Factories in Seeders
+
+Factories pair well with seeders for populating your database:
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+    "fmt"
+
+    "myapp/factories"
+)
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    users := factories.UserFactory.MakeMany(50)
+
+    for _, u := range users {
+        _, err := db.Exec(
+            "INSERT INTO users (name, email, age) VALUES ($1, $2, $3)",
+            u.Name, u.Email, u.Age,
+        )
+        if err != nil {
+            return fmt.Errorf("failed to seed user: %w", err)
+        }
+    }
+
+    return nil
+}
+```
+
+## What's Next?
+
+- [Faker Methods](/docs/factories/faker-methods) — full reference of available data generation methods
+- [Named States](/docs/factories/named-states) — define factory variants like "admin" or "unverified"
+- [Make and MakeMany](/docs/factories/make-and-make-many) — generate single or batch instances

@@ -1,0 +1,185 @@
+---
+title: Utility Operations
+description: Drop, rename, and inspect tables using Schema Builder utility methods.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Utility Operations
+
+Beyond creating and altering tables, the Schema Builder provides utility methods for dropping, renaming, and inspecting tables and columns.
+
+## Drop Table
+
+Remove a table from the database:
+
+```go
+s.Drop("posts")
+```
+
+This will fail with an error if the table doesn't exist.
+
+## Drop If Exists
+
+Safely remove a table only if it exists:
+
+```go
+s.DropIfExists("posts")
+```
+
+This is the recommended approach in `Down` methods since it won't error if the table has already been removed:
+
+```go
+func (m *CreatePostsTable) Down(s *schema.Builder) {
+    s.DropIfExists("posts")
+}
+```
+
+## Rename Table
+
+Rename an existing table:
+
+```go
+s.Rename("posts", "articles")
+```
+
+The first argument is the current table name, and the second is the new name.
+
+```go title="migrations/20240601_rename_posts_to_articles.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type RenamePostsToArticles struct{}
+
+func (m *RenamePostsToArticles) Up(s *schema.Builder) {
+    s.Rename("posts", "articles")
+}
+
+func (m *RenamePostsToArticles) Down(s *schema.Builder) {
+    s.Rename("articles", "posts")
+}
+```
+
+## Has Table
+
+Check if a table exists in the database:
+
+```go
+if s.HasTable("users") {
+    // Table exists
+}
+```
+
+This is useful for conditional logic in migrations:
+
+```go
+func (m *ConditionalMigration) Up(s *schema.Builder) {
+    if !s.HasTable("settings") {
+        s.Create("settings", func(bp *schema.Blueprint) {
+            bp.ID("id")
+            bp.String("key", 255).Unique()
+            bp.Text("value").Nullable()
+        })
+    }
+}
+```
+
+## Has Column
+
+Check if a column exists in a table:
+
+```go
+if s.HasColumn("users", "phone") {
+    // Column exists
+}
+```
+
+Useful for safely adding columns that might already exist:
+
+```go
+func (m *AddPhoneToUsers) Up(s *schema.Builder) {
+    if !s.HasColumn("users", "phone") {
+        s.Alter("users", func(bp *schema.Blueprint) {
+            bp.String("phone", 20).Nullable()
+        })
+    }
+}
+```
+
+<Callout type="info">
+  `HasTable` and `HasColumn` query the database's information schema at runtime. They're useful for writing defensive migrations that can run safely even if the schema is in an unexpected state.
+</Callout>
+
+## Raw SQL Execution (v1.5.0)
+
+Execute arbitrary SQL statements directly, bypassing the fluent API. This is useful for materialized views, custom DDL, database-specific features, or anything the Schema Builder doesn't cover.
+
+```go
+func (s *Builder) RawExec(statements ...string)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `statements` | `...string` | One or more raw SQL statements to execute |
+
+Each statement is executed sequentially. Pass multiple statements as separate arguments:
+
+```go
+func (m *CreateReportViews) Up(s *schema.Builder) {
+    s.RawExec(
+        `CREATE MATERIALIZED VIEW monthly_sales AS
+         SELECT date_trunc('month', created_at) AS month, SUM(amount) AS total
+         FROM orders GROUP BY month`,
+        `CREATE UNIQUE INDEX idx_monthly_sales_month ON monthly_sales (month)`,
+    )
+}
+
+func (m *CreateReportViews) Down(s *schema.Builder) {
+    s.RawExec(
+        "DROP MATERIALIZED VIEW IF EXISTS monthly_sales",
+    )
+}
+```
+
+Other common use cases:
+
+```go
+// Enable a PostgreSQL extension
+s.RawExec("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+
+// Create a partial index
+s.RawExec("CREATE INDEX idx_active_users ON users (email) WHERE active = true")
+
+// Set up a trigger
+s.RawExec(
+    `CREATE OR REPLACE FUNCTION update_timestamp()
+     RETURNS TRIGGER AS $$
+     BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+     $$ LANGUAGE plpgsql`,
+    `CREATE TRIGGER set_updated_at BEFORE UPDATE ON users
+     FOR EACH ROW EXECUTE FUNCTION update_timestamp()`,
+)
+```
+
+<Callout type="warn">
+  `RawExec` mengirim SQL langsung ke database tanpa validasi grammar. Pastikan SQL yang ditulis kompatibel dengan driver database yang digunakan. Untuk operasi yang didukung fluent API (create table, alter, drop, dll.), tetap gunakan method Builder yang tersedia.
+</Callout>
+
+## Quick Reference
+
+| Method | Description |
+|--------|-------------|
+| `s.Drop(table)` | Drop a table (errors if not found) |
+| `s.DropIfExists(table)` | Drop a table if it exists |
+| `s.Rename(from, to)` | Rename a table |
+| `s.HasTable(table)` | Check if a table exists (returns `bool`) |
+| `s.HasColumn(table, column)` | Check if a column exists (returns `bool`) |
+| `s.RawExec(statements...)` | Execute raw SQL statements directly |
+
+## What's Next?
+
+- [Database Grammars](/docs/database-grammars) — how SQL is generated for different databases
+- [Migrations](/docs/migrations/defining-migrations) — using the Schema Builder within migrations

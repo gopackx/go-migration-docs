@@ -1,0 +1,134 @@
+---
+title: Echo
+description: Integrate go-migration with the Echo web framework using only *sql.DB.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+# Echo Integration
+
+go-migration works with [Echo](https://echo.labstack.com/) out of the box. Since go-migration depends only on `*sql.DB`, there are no framework-specific adapters or plugins to install.
+
+<Callout type="info">
+  go-migration is framework-agnostic. It only needs a `*sql.DB` connection — the same one your Echo application already uses.
+</Callout>
+
+## Complete Example
+
+This example shows an Echo application that runs migrations on startup and exposes a health-check endpoint.
+
+<Steps>
+
+<Step>
+
+### Define a Migration
+
+```go title="migrations/20240101_create_posts_table.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type CreatePostsTable struct{}
+
+func (m *CreatePostsTable) Up(s *schema.Builder) {
+    s.Create("posts", func(bp *schema.Blueprint) {
+        bp.ID("id")
+        bp.String("title", 255)
+        bp.Text("body")
+        bp.BigInteger("author_id").Unsigned()
+        bp.Boolean("published").Default(false)
+        bp.Timestamp("created_at").Nullable()
+        bp.Timestamp("updated_at").Nullable()
+    })
+}
+
+func (m *CreatePostsTable) Down(s *schema.Builder) {
+    s.DropIfExists("posts")
+}
+```
+
+</Step>
+
+<Step>
+
+### Set Up the Database and Migrator
+
+Open a `*sql.DB` connection, create the migrator, register migrations, and run them before starting Echo.
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+    "net/http"
+
+    "github.com/labstack/echo/v4"
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/migrator"
+    "your-project/migrations"
+)
+
+func main() {
+    // 1. Open a database connection
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    // 2. Create the migrator
+    m := migrator.New(db)
+
+    // 3. Register migrations
+    m.Register("20240101_create_posts_table", &migrations.CreatePostsTable{})
+
+    // 4. Run pending migrations
+    if err := m.Up(); err != nil {
+        log.Fatal("migration failed: ", err)
+    }
+    log.Println("Migrations completed")
+
+    // 5. Set up Echo
+    e := echo.New()
+
+    e.GET("/health", func(c echo.Context) error {
+        if err := db.Ping(); err != nil {
+            return c.JSON(http.StatusInternalServerError, map[string]string{"status": "unhealthy"})
+        }
+        return c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
+    })
+
+    e.Logger.Fatal(e.Start(":8080"))
+}
+```
+
+</Step>
+
+<Step>
+
+### Run the Application
+
+```bash
+go run main.go
+```
+
+Echo starts on port 8080 with all migrations applied. The `/health` endpoint confirms the database connection is active.
+
+</Step>
+
+</Steps>
+
+## Key Takeaway
+
+go-migration doesn't know or care about Echo. It receives a `*sql.DB`, runs migrations, and returns. You can call `m.Up()` at startup, in a CLI command, or anywhere else — the integration pattern is the same regardless of framework.
+
+## What's Next?
+
+- [Fiber Integration](/docs/framework-integration/fiber) — same pattern with Fiber
+- [Defining Migrations](/docs/migrations/defining-migrations) — learn more about migration structs
+- [Schema Builder](/docs/schema-builder/creating-tables) — full table and column API

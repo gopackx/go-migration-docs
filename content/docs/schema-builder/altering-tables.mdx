@@ -1,0 +1,93 @@
+---
+title: Altering Tables
+description: Learn how to modify existing database tables using the Schema Builder's s.Alter() method.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Altering Tables
+
+The `Alter` method modifies an existing table. Like `Create`, it takes a table name and a Blueprint callback — but instead of defining a new table, you add or remove columns from an existing one.
+
+## Basic Usage
+
+```go
+s.Alter("users", func(bp *schema.Blueprint) {
+    bp.String("phone", 20).Nullable()
+})
+```
+
+This adds a `phone` column to the `users` table.
+
+## Adding Columns
+
+Use the same column methods you'd use in `Create` to add new columns:
+
+```go title="migrations/20240201_add_profile_fields_to_users.go"
+package migrations
+
+import (
+    "github.com/gopackx/go-migration/schema"
+)
+
+type AddProfileFieldsToUsers struct{}
+
+func (m *AddProfileFieldsToUsers) Up(s *schema.Builder) {
+    s.Alter("users", func(bp *schema.Blueprint) {
+        bp.String("phone", 20).Nullable()
+        bp.Text("bio").Nullable()
+        bp.String("avatar_url", 500).Nullable()
+        bp.Date("date_of_birth").Nullable()
+    })
+}
+
+func (m *AddProfileFieldsToUsers) Down(s *schema.Builder) {
+    s.Alter("users", func(bp *schema.Blueprint) {
+        bp.DropColumn("phone")
+        bp.DropColumn("bio")
+        bp.DropColumn("avatar_url")
+        bp.DropColumn("date_of_birth")
+    })
+}
+```
+
+## Dropping Columns
+
+Use `bp.DropColumn()` to remove a column from the table:
+
+```go
+s.Alter("users", func(bp *schema.Blueprint) {
+    bp.DropColumn("phone")
+})
+```
+
+You can drop multiple columns in a single `Alter` call:
+
+```go
+s.Alter("users", func(bp *schema.Blueprint) {
+    bp.DropColumn("phone")
+    bp.DropColumn("bio")
+    bp.DropColumn("avatar_url")
+})
+```
+
+<Callout type="warn">
+  Dropping columns is a destructive operation. Make sure your `Down` method can recreate the column with the correct type and modifiers so rollbacks work properly.
+</Callout>
+
+## Adding Indexes and Foreign Keys
+
+You can also add indexes and foreign keys in an `Alter` call:
+
+```go
+s.Alter("posts", func(bp *schema.Blueprint) {
+    bp.String("category", 100).Nullable()
+    bp.Index("idx_posts_category", "category")
+})
+```
+
+## What's Next?
+
+- [Column Types](/docs/schema-builder/column-types) — all available column types
+- [Column Modifiers](/docs/schema-builder/column-modifiers) — Nullable, Default, Unique, and more
+- [Indexes](/docs/schema-builder/indexes) — single-column, composite, and unique indexes

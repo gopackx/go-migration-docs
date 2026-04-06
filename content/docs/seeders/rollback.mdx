@@ -1,0 +1,157 @@
+---
+title: Seeder Rollback
+description: Undo seeded data by implementing the RollbackableSeeder interface and using runner.Rollback() or runner.Truncate().
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Seeder Rollback
+
+<Callout type="info">
+  New in v1.3.0: The `RollbackableSeeder` interface, `runner.Rollback()`, `runner.Truncate()`, and the `db:seed:rollback` / `db:seed:truncate` CLI commands are all introduced in v1.3.0.
+</Callout>
+
+Sometimes you need to undo seeded data — for example, cleaning up test data or resetting a table to a known state. The rollback system provides two approaches: custom rollback logic and table truncation.
+
+## The RollbackableSeeder Interface
+
+Implement the `RollbackableSeeder` interface to define custom rollback logic for a seeder:
+
+```go
+type RollbackableSeeder interface {
+    Seeder
+    Rollback(db *sql.DB) error
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `Rollback` | `Rollback(db *sql.DB) error` | Undoes the data inserted by `Run` |
+
+The `RollbackableSeeder` interface extends the base `Seeder` interface, so you still need to implement `Run`.
+
+## Defining a Rollbackable Seeder
+
+```go title="seeders/user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+)
+
+type UserSeeder struct{}
+
+func (s *UserSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO users (name, email) VALUES ($1, $2)",
+        "Alice", "alice@example.com",
+    )
+    return err
+}
+
+func (s *UserSeeder) Rollback(db *sql.DB) error {
+    _, err := db.Exec("DELETE FROM users WHERE email = $1", "alice@example.com")
+    return err
+}
+```
+
+The `Rollback` method should reverse whatever `Run` did. This gives you full control over the cleanup logic.
+
+## Rolling Back a Seeder
+
+### Programmatic API
+
+Use `runner.Rollback()` to roll back a specific seeder by its registered name:
+
+```go
+runner := seeder.NewRunner(db)
+runner.Register("UserSeeder", &seeders.UserSeeder{})
+
+// Roll back the UserSeeder
+if err := runner.Rollback("UserSeeder"); err != nil {
+    log.Fatal(err)
+}
+```
+
+If the seeder doesn't implement `RollbackableSeeder`, `runner.Rollback()` returns an error.
+
+### CLI
+
+Use the `db:seed:rollback` command:
+
+```bash
+# Roll back a specific seeder
+go-migration db:seed:rollback --class=UserSeeder
+```
+
+<Callout type="warn">
+  `runner.Rollback()` returns an error if the specified seeder does not implement the `RollbackableSeeder` interface. Make sure your seeder has a `Rollback` method before attempting to roll it back.
+</Callout>
+
+## Truncating a Table
+
+For a simpler approach, use `runner.Truncate()` to delete all rows from a table:
+
+```go
+// Delete all rows from the "users" table
+if err := runner.Truncate("users"); err != nil {
+    log.Fatal(err)
+}
+```
+
+`Truncate` executes a `DELETE FROM` statement on the specified table. This is useful when you want to clear a table without writing custom rollback logic.
+
+<Callout type="info">
+  `runner.Truncate()` uses `DELETE FROM` rather than SQL `TRUNCATE` for broader compatibility across databases and to respect foreign key constraints.
+</Callout>
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/seeder"
+    "your-project/seeders"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    runner := seeder.NewRunner(db)
+
+    runner.Register("UserSeeder", &seeders.UserSeeder{})
+    runner.Register("PostSeeder", &seeders.PostSeeder{})
+
+    // Seed the database
+    if err := runner.RunAll(); err != nil {
+        log.Fatal(err)
+    }
+
+    // Later, roll back a specific seeder
+    if err := runner.Rollback("UserSeeder"); err != nil {
+        log.Fatal(err)
+    }
+
+    // Or truncate an entire table
+    if err := runner.Truncate("posts"); err != nil {
+        log.Fatal(err)
+    }
+
+    log.Println("Rollback complete!")
+}
+```
+
+## What's Next?
+
+- [Batch Insert](/docs/seeders/batch-insert) — insert large datasets efficiently
+- [Seeder Tags](/docs/seeders/tags) — group seeders with tags and run them selectively

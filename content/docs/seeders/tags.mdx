@@ -1,0 +1,151 @@
+---
+title: Seeder Tags
+description: Group seeders with tags and run only matching seeders using RunByTag or the CLI --tag flag.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Seeder Tags
+
+<Callout type="info">
+  New in v1.3.0: Seeder tags, the `TaggedSeeder` interface, `RunByTag()`, and the `--tag` CLI flag are all introduced in v1.3.0.
+</Callout>
+
+Tags let you group seeders by purpose — like "development", "testing", or "production" — and run only the seeders that match a specific tag.
+
+## The TaggedSeeder Interface
+
+Implement the `TaggedSeeder` interface to assign tags to a seeder:
+
+```go
+type TaggedSeeder interface {
+    Seeder
+    Tags() []string
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `Tags` | `Tags() []string` | Returns the tags this seeder belongs to |
+
+A seeder can have multiple tags. The `TaggedSeeder` interface extends the base `Seeder` interface, so you still need to implement `Run`.
+
+## Defining a Tagged Seeder
+
+```go title="seeders/dev_user_seeder.go"
+package seeders
+
+import (
+    "database/sql"
+)
+
+type DevUserSeeder struct{}
+
+func (s *DevUserSeeder) Tags() []string {
+    return []string{"development", "testing"}
+}
+
+func (s *DevUserSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec(
+        "INSERT INTO users (name, email) VALUES ($1, $2)",
+        "Dev User", "dev@example.com",
+    )
+    return err
+}
+```
+
+This seeder runs when either the "development" or "testing" tag is requested.
+
+## Running Seeders by Tag
+
+### Programmatic API
+
+Use `runner.RunByTag()` to execute only seeders matching a specific tag:
+
+```go
+runner := seeder.NewRunner(db)
+
+runner.Register("DevUserSeeder", &seeders.DevUserSeeder{})
+runner.Register("ProdDefaultsSeeder", &seeders.ProdDefaultsSeeder{})
+runner.Register("TestFixtureSeeder", &seeders.TestFixtureSeeder{})
+
+// Run only seeders tagged "development"
+if err := runner.RunByTag("development"); err != nil {
+    log.Fatal(err)
+}
+```
+
+### CLI
+
+Use the `--tag` flag with the `db:seed` command:
+
+```bash
+# Run only seeders tagged "development"
+go-migration db:seed --tag=development
+
+# Run only seeders tagged "testing"
+go-migration db:seed --tag=testing
+```
+
+## Seeders Without Tags
+
+The `TaggedSeeder` interface is optional. Seeders that don't implement it:
+
+- Run normally with `runner.RunAll()` and `runner.Run()`
+- Are **skipped** by `runner.RunByTag()` — only tagged seeders are considered
+
+```go
+// This seeder has no tags — it runs with RunAll() but not RunByTag()
+type RoleSeeder struct{}
+
+func (s *RoleSeeder) Run(db *sql.DB) error {
+    _, err := db.Exec("INSERT INTO roles (name) VALUES ($1)", "admin")
+    return err
+}
+```
+
+<Callout type="info">
+  `RunByTag` only considers seeders that implement `TaggedSeeder`. Untagged seeders are silently skipped, not treated as errors.
+</Callout>
+
+## Complete Example
+
+```go title="main.go"
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/lib/pq"
+
+    "github.com/gopackx/go-migration/seeder"
+    "your-project/seeders"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    runner := seeder.NewRunner(db)
+
+    runner.Register("DevUserSeeder", &seeders.DevUserSeeder{})       // tags: development, testing
+    runner.Register("ProdDefaultsSeeder", &seeders.ProdDefaultsSeeder{}) // tags: production
+    runner.Register("RoleSeeder", &seeders.RoleSeeder{})             // no tags
+
+    // Run only development seeders
+    if err := runner.RunByTag("development"); err != nil {
+        log.Fatal(err)
+    }
+
+    log.Println("Development seeders complete!")
+}
+```
+
+## What's Next?
+
+- [Seeder Rollback](/docs/seeders/rollback) — undo seeded data with rollback support
+- [Batch Insert](/docs/seeders/batch-insert) — insert large datasets efficiently
