@@ -43,8 +43,8 @@ go-migration --help
 | `make:seeder` | Generate a new seeder file |
 | `make:factory` | Generate a new factory file |
 | `db:seed` | Run database seeders |
-| `db:seed:rollback` | Roll back a specific seeder *(new in v1.3.0)* |
-| `db:seed:truncate` | Truncate (delete all rows from) a specific table *(new in v1.3.0)* |
+| `db:seed:rollback` | Roll back a specific seeder *(new in v1.0.0)* |
+| `db:seed:truncate` | Truncate (delete all rows from) a specific table *(new in v1.0.0)* |
 
 ### Smart Command Classification
 
@@ -176,7 +176,7 @@ Migrations are executed in the order they were registered. Each run is assigned 
 | `--seed` | `bool` | `false` | Run all registered seeders after migrations complete |
 
 <Callout type="info">
-  The `--seed` flag is new in v1.3.0. It allows you to run all registered seeders immediately after migrations complete, combining two steps into one.
+  The `--seed` flag is new in v1.0.0. It allows you to run all registered seeders immediately after migrations complete, combining two steps into one.
 </Callout>
 
 ### Examples
@@ -243,7 +243,7 @@ This calls the `Down` method on every applied migration, starting from the most 
 </Callout>
 
 <Callout type="info">
-  The `--force` flag on `migrate:reset` is new in v1.3.0.
+  The `--force` flag on `migrate:reset` is new in v1.0.0.
 </Callout>
 
 ### Flags
@@ -284,7 +284,7 @@ Useful during development when you want to rebuild the entire database schema fr
 | `--seed` | `bool` | `false` | Run all registered seeders after migrations complete |
 
 <Callout type="info">
-  The `--seed` flag on `migrate:refresh` is new in v1.3.0.
+  The `--seed` flag on `migrate:refresh` is new in v1.0.0.
 </Callout>
 
 ### Examples
@@ -587,7 +587,7 @@ go-migration db:seed [--class=CLASS] [--tag=TAG]
 | `--tag` | `string` | Run only seeders matching the given tag |
 
 <Callout type="info">
-  The `--tag` flag is new in v1.3.0. It runs only seeders that implement the `TaggedSeeder` interface and return the matching tag. See [Seeder Tags](/docs/seeders/tags) for details.
+  The `--tag` flag is new in v1.0.0. It runs only seeders that implement the `TaggedSeeder` interface and return the matching tag. See [Seeder Tags](/docs/seeders/tags) for details.
 </Callout>
 
 ### Examples
@@ -615,7 +615,7 @@ go-migration db:seed --config=./config/development.yaml
 ## db:seed:rollback
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Roll back a specific seeder by calling its `Rollback` method. The seeder must implement the `RollbackableSeeder` interface.
@@ -649,7 +649,7 @@ go-migration db:seed:rollback --class=UserSeeder --config=./config/development.y
 ## db:seed:truncate
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Delete all rows from a specific table. This is useful for clearing seeded data without dropping the table itself.

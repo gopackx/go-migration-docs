@@ -113,7 +113,7 @@ func (m *AddPhoneToUsers) Up(s *schema.Builder) {
   `HasTable` and `HasColumn` query the database's information schema at runtime. They're useful for writing defensive migrations that can run safely even if the schema is in an unexpected state.
 </Callout>
 
-## Raw SQL Execution (v1.5.0)
+## Raw SQL Execution (v1.0.0)
 
 Execute arbitrary SQL statements directly, bypassing the fluent API. This is useful for materialized views, custom DDL, database-specific features, or anything the Schema Builder doesn't cover.
 

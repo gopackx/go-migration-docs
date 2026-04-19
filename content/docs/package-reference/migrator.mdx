@@ -51,7 +51,7 @@ func main() {
 See [Quick Start](/docs/getting-started/quick-start) for a complete example.
 
 <Callout type="info">
-  New in v1.3.0: `Run()` now supports the `--seed` flag on `migrate` and `migrate:refresh`, the `--tag` flag on `db:seed`, the `--force` flag on `migrate:reset`, and the new `db:seed:rollback` and `db:seed:truncate` commands. See [CLI Reference](/docs/cli) for details.
+  New in v1.0.0: `Run()` now supports the `--seed` flag on `migrate` and `migrate:refresh`, the `--tag` flag on `db:seed`, the `--force` flag on `migrate:reset`, and the new `db:seed:rollback` and `db:seed:truncate` commands. See [CLI Reference](/docs/cli) for details.
 </Callout>
 
 <Callout type="info">
@@ -507,7 +507,7 @@ See [Defining Migrations](/docs/migrations/defining-migrations) and [Transaction
 ## TaggedSeeder Interface
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Seeders can implement `TaggedSeeder` to be selectively run using the `--tag` flag on `db:seed`.
@@ -541,7 +541,7 @@ See [Seeder Tags](/docs/seeders/tags) for details.
 ## RollbackableSeeder Interface
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Seeders can implement `RollbackableSeeder` to support rollback via the `db:seed:rollback` command.
@@ -595,5 +595,5 @@ See [Seeder Rollback](/docs/seeders/rollback) for details.
 | `Install` | `Install() error` | Create tracking table |
 | `BeforeMigrate` | `BeforeMigrate(fn)` | Register pre-migration hook |
 | `AfterMigrate` | `AfterMigrate(fn)` | Register post-migration hook |
-| `TaggedSeeder` | `Tags() []string` | Interface for tag-based seeder filtering *(v1.3.0)* |
-| `RollbackableSeeder` | `Rollback(db) error` | Interface for seeder rollback support *(v1.3.0)* |
+| `TaggedSeeder` | `Tags() []string` | Interface for tag-based seeder filtering *(v1.0.0)* |
+| `RollbackableSeeder` | `Rollback(db) error` | Interface for seeder rollback support *(v1.0.0)* |

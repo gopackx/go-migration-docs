@@ -361,7 +361,7 @@ Interpolation happens after reading the file and before YAML/JSON parsing:
 2. All `${VAR_NAME}` placeholders are replaced with the corresponding environment variable values
 3. The resulting string is then parsed as YAML or JSON
 
-### Auto-Unquote for JSON (v1.5.0)
+### Auto-Unquote for JSON (v1.0.0)
 
 When using JSON config files, `InterpolateEnv` automatically removes surrounding quotes for values that resolve to numeric, boolean (`true`/`false`), or `null` types. This means your JSON stays valid with correct types after interpolation.
 

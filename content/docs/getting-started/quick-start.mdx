@@ -149,7 +149,7 @@ The `init()` function registers the migration automatically when the package is 
 <Tabs items={["Using migrator.Run() (Recommended)", "Manual Setup"]}>
 <Tab value="Using migrator.Run() (Recommended)">
 
-`migrator.Run()` is the all-in-one CLI runner introduced in v1.2.0. It handles config loading, database connection, auto-discovery of migrations and seeders, grammar auto-resolution, and command dispatch — all in a single call.
+`migrator.Run()` is the all-in-one CLI runner introduced in v1.0.0. It handles config loading, database connection, auto-discovery of migrations and seeders, grammar auto-resolution, and command dispatch — all in a single call.
 
 ```go title="main.go"
 package main
@@ -264,7 +264,7 @@ go run main.go make:migration create_posts # Scaffold a migration file
 </Callout>
 
 <Callout type="info">
-  New in v1.3.0: The `--seed` flag on `migrate` and `migrate:refresh`, and the `--tag` flag on `db:seed` for running seeders by tag. See the [CLI Reference](/docs/cli) for all available flags.
+  New in v1.0.0: The `--seed` flag on `migrate` and `migrate:refresh`, and the `--tag` flag on `db:seed` for running seeders by tag. See the [CLI Reference](/docs/cli) for all available flags.
 </Callout>
 
 ## Using a Different Database

@@ -136,7 +136,7 @@ See [Dependencies](/docs/seeders/dependencies).
 ## TaggedSeeder Interface
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Optionally implement `TaggedSeeder` to assign tags to a seeder for selective execution.
@@ -177,7 +177,7 @@ See [Seeder Tags](/docs/seeders/tags).
 ## RollbackableSeeder Interface
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Optionally implement `RollbackableSeeder` to define custom rollback logic for a seeder.
@@ -314,7 +314,7 @@ See [Running Seeders](/docs/seeders/running-seeders).
 ## `runner.RunByTag()`
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Executes all registered seeders that implement `TaggedSeeder` and have a matching tag.
@@ -344,7 +344,7 @@ See [Seeder Tags](/docs/seeders/tags).
 ## `runner.Rollback()`
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Rolls back a specific seeder by calling its `Rollback` method.
@@ -372,7 +372,7 @@ See [Seeder Rollback](/docs/seeders/rollback).
 ## `runner.Truncate()`
 
 <Callout type="info">
-  New in v1.3.0
+  New in v1.0.0
 </Callout>
 
 Deletes all rows from a table.

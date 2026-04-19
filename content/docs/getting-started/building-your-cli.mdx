@@ -22,7 +22,7 @@ Go is a compiled language, so unlike PHP (Laravel Artisan) or Python (Django man
 ## Why Do I Need This?
 
 <Callout type="info">
-  **New in v1.2.0:** If you don't need custom CLI logic, you can use `migrator.Run()` instead of building a custom binary. It handles config loading, DB connection, auto-discovery, and command dispatch in a single call. See [Quick Start](/docs/getting-started/quick-start) for details.
+  **New in v1.0.0:** If you don't need custom CLI logic, you can use `migrator.Run()` instead of building a custom binary. It handles config loading, DB connection, auto-discovery, and command dispatch in a single call. See [Quick Start](/docs/getting-started/quick-start) for details.
 </Callout>
 
 The global `go-migration` CLI can only scaffold files (`make:migration`, `make:seeder`, `make:factory`) and manage the tracking table. It cannot execute your migrations because your `Up()` and `Down()` methods are Go code that must be compiled into a binary.
