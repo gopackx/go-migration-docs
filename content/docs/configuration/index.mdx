@@ -20,7 +20,7 @@ go-migration migrate --config=./config/go-migration.yaml
 ```
 
 <Callout type="warn">
-  **Perubahan nama file konfigurasi:** Nama file konfigurasi default telah berubah beberapa kali: `migration.yaml` / `database.yaml` → `go-migration.yaml` (v1.4.0) → `migration.json` (v1.4.2). Sejak v1.4.2, `migration.json` adalah default. File YAML (`go-migration.yaml`, `migration.yaml`, `database.yaml`) masih didukung melalui flag `--config`, tetapi saat file YAML dimuat, go-migration menampilkan peringatan deprecation di console.
+  **Perubahan nama file konfigurasi:** Nama file konfigurasi default telah berubah beberapa kali: `migration.yaml` / `database.yaml` → `go-migration.yaml` (v1.0.0) → `migration.json` (v1.0.0). Sejak v1.0.0, `migration.json` adalah default. File YAML (`go-migration.yaml`, `migration.yaml`, `database.yaml`) masih didukung melalui flag `--config`, tetapi saat file YAML dimuat, go-migration menampilkan peringatan deprecation di console.
 </Callout>
 
 ## Configuration File
@@ -255,7 +255,7 @@ Optional settings use these defaults when not specified in the config file or en
 ## Multi-Connection Configuration
 
 <Callout type="info">
-  New in v1.4.0 — the configuration file now supports a `default` field and a `connections` map for managing multiple database connections.
+  New in v1.0.0 — the configuration file now supports a `default` field and a `connections` map for managing multiple database connections.
 </Callout>
 
 The `default` field specifies which connection is used when no specific connection is requested. The `connections` field is a map of named database connections, where each key is a connection name and the value contains the connection settings.

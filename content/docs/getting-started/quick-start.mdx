@@ -9,7 +9,7 @@ import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 # Quick Start
 
-This guide walks you through creating and running your first migration with go-migration v1.4.2. By the end, you'll have a `users` table in your database.
+This guide walks you through creating and running your first migration with go-migration v1.0.0. By the end, you'll have a `users` table in your database.
 
 <Steps>
 
@@ -70,7 +70,7 @@ If you ran `go-migration init`, a `migration.json` was already created in your p
 </Tab>
 <Tab value="YAML (Deprecated)">
 
-If you prefer YAML, create a `go-migration.yaml` manually. Note: YAML format is deprecated since v1.4.2 and will show a deprecation warning when loaded.
+If you prefer YAML, create a `go-migration.yaml` manually. Note: YAML format is deprecated since v1.0.0 and will show a deprecation warning when loaded.
 
 ```yaml title="go-migration.yaml"
 default: postgres
@@ -137,7 +137,7 @@ func (m *CreateUsersTable) Down(s *schema.Builder) error {
 The `init()` function registers the migration automatically when the package is imported. The `Up` method creates the table, and `Down` reverses it.
 
 <Callout type="info">
-  Migration filenames in v1.4.0 use the format `YYYY_MM_DD_HHMMSS_RRRR_description.go`, where `RRRR` is a random 4-digit number to prevent timestamp collisions. The `make:migration` command generates this automatically. The old format (`YYYYMMDDHHMMSS_description.go`) is still supported.
+  Migration filenames in v1.0.0 use the format `YYYY_MM_DD_HHMMSS_RRRR_description.go`, where `RRRR` is a random 4-digit number to prevent timestamp collisions. The `make:migration` command generates this automatically. The old format (`YYYYMMDDHHMMSS_description.go`) is still supported.
 </Callout>
 
 </Step>

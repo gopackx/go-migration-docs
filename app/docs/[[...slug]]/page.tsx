@@ -18,12 +18,6 @@ export default async function Page(props: {
         style: "clerk",
         single: false,
       }}
-      editOnGithub={{
-        owner: "gopackx",
-        repo: "go-migration",
-        sha: "master",
-        path: `docs/content/docs/${page.file.path}`,
-      }}
       breadcrumb={{ enabled: true }}
     >
       <span className="eyebrow w-fit">Documentation</span>

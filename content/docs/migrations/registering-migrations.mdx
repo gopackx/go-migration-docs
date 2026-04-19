@@ -12,7 +12,7 @@ After defining your migration structs, you need to register them with the migrat
 
 ## Timestamp Naming Convention
 
-Migration names must follow a timestamp-based naming convention. Starting with v1.4.0, the recommended format includes a random 4-digit segment to prevent timestamp collisions:
+Migration names must follow a timestamp-based naming convention. Starting with v1.0.0, the recommended format includes a random 4-digit segment to prevent timestamp collisions:
 
 ```
 YYYY_MM_DD_HHMMSS_RRRR_description
@@ -22,9 +22,9 @@ For example:
 
 | Migration Name | Format | Description |
 |---------------|--------|-------------|
-| `2025_01_15_143022_1234_create_users_table` | New (v1.4.0) | Creates the users table |
-| `2025_01_15_143045_5678_create_posts_table` | New (v1.4.0) | Creates the posts table |
-| `2025_02_01_091500_4321_add_phone_to_users` | New (v1.4.0) | Adds a phone column to users |
+| `2025_01_15_143022_1234_create_users_table` | New (v1.0.0) | Creates the users table |
+| `2025_01_15_143045_5678_create_posts_table` | New (v1.0.0) | Creates the posts table |
+| `2025_02_01_091500_4321_add_phone_to_users` | New (v1.0.0) | Adds a phone column to users |
 | `20240101000001_create_users` | Legacy (still supported) | Creates the users table |
 | `20240101000002_create_posts` | Legacy (still supported) | Creates the posts table |
 
@@ -43,7 +43,7 @@ go-migration sorts migrations alphabetically by name, so timestamp prefixes ensu
 Auto-discovery uses Go's `init()` function pattern for self-registration. Each migration file registers itself, and the migrator loads them automatically.
 
 <Callout type="info">
-  In v1.4.0, the `make:migration` command automatically generates migration files with `init()` and `migrator.AutoRegister()` included — no manual registration code needed. Just run `go-migration make:migration create_users_table` and the generated file is ready to use.
+  In v1.0.0, the `make:migration` command automatically generates migration files with `init()` and `migrator.AutoRegister()` included — no manual registration code needed. Just run `go-migration make:migration create_users_table` and the generated file is ready to use.
 </Callout>
 
 ### Step 1: Add `init()` to Each Migration File

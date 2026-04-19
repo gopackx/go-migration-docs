@@ -7,100 +7,6 @@ import { useState } from "react";
 const GITHUB_URL = "https://github.com/gopackx/go-migration";
 const GO_GET_CMD = "go get github.com/gopackx/go-migration";
 
-const features = [
-  {
-    title: "Struct-Based Migrations",
-    description:
-      "Define migrations as Go structs with explicit Up and Down methods. Type-safe, testable, and plays nicely with your existing codebase.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[22px] w-[22px]">
-        <path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z" />
-        <path d="m7 16.5-4.74-2.85" />
-        <path d="m7 16.5 5-3" />
-        <path d="M7 16.5v5.17" />
-        <path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z" />
-        <path d="m17 16.5-5-3" />
-        <path d="m17 16.5 4.74-2.85" />
-        <path d="M17 16.5v5.17" />
-        <path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z" />
-        <path d="M12 8 7.26 5.15" />
-        <path d="m12 8 4.74-2.85" />
-        <path d="M12 13.5V8" />
-      </svg>
-    ),
-    color: "text-[#14B8A6] bg-[#14B8A6]/10",
-    href: "/docs/migrations/defining-migrations",
-  },
-  {
-    title: "Fluent Schema Builder",
-    description:
-      "Chainable API for creating tables, columns, indexes, and foreign keys. Write expressive schemas without touching raw SQL.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[22px] w-[22px]">
-        <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
-        <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
-        <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
-      </svg>
-    ),
-    color: "text-[#3B82F6] bg-[#3B82F6]/10",
-    href: "/docs/schema-builder/creating-tables",
-  },
-  {
-    title: "Seeders & Factories",
-    description:
-      "Populate databases with realistic test data using composable factories and deterministic seeders. Perfect for dev and CI.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[22px] w-[22px]">
-        <path d="M7 20h10" />
-        <path d="M10 20c5.5-2.5.8-6.4 3-10" />
-        <path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z" />
-        <path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z" />
-      </svg>
-    ),
-    color: "text-[#10B981] bg-[#10B981]/10",
-    href: "/docs/seeders/defining-seeders",
-  },
-  {
-    title: "CLI Commands",
-    description:
-      "A single-binary CLI for migrate, rollback, refresh, scaffold, and more. Artisan-style ergonomics with Go-native performance.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[22px] w-[22px]">
-        <polyline points="4 17 10 11 4 5" />
-        <line x1="12" x2="20" y1="19" y2="19" />
-      </svg>
-    ),
-    color: "text-[#F59E0B] bg-[#F59E0B]/10",
-    href: "/docs/cli",
-  },
-  {
-    title: "Multi-Database Support",
-    description:
-      "First-class drivers for PostgreSQL, MySQL/MariaDB, and SQLite — with dialect-aware SQL generation and transactional DDL where supported.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[22px] w-[22px]">
-        <ellipse cx="12" cy="5" rx="9" ry="3" />
-        <path d="M3 5V19A9 3 0 0 0 21 19V5" />
-        <path d="M3 12A9 3 0 0 0 21 12" />
-      </svg>
-    ),
-    color: "text-[#EC4899] bg-[#EC4899]/10",
-    href: "/docs/connections/connection-manager",
-  },
-  {
-    title: "Framework Agnostic",
-    description:
-      "Drop it into any Go project — Gin, Echo, Fiber, Chi, or plain net/http. No framework coupling, no global state, no init surprises.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[22px] w-[22px]">
-        <path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.23 8.77c.24-.24.581-.353.917-.303.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073-.05-.336.062-.676.303-.917l1.525-1.525A2.402 2.402 0 0 1 12 2c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z" />
-      </svg>
-    ),
-    color: "text-[#06B6D4] bg-[#06B6D4]/10",
-    href: "/docs/framework-integration/gin",
-  },
-];
-
 const quickStartSteps = [
   {
     num: 1,
@@ -285,36 +191,6 @@ func (m *CreateUsers) Up(s *schema.Builder) {
 {`    })
 }`}
             </pre>
-          </div>
-        </div>
-      </section>
-
-      {/* === Features === */}
-      <section id="features" className="border-t border-fd-border bg-fd-secondary/40">
-        <div className="mx-auto w-full max-w-[1440px] px-5 py-16 md:px-16 md:py-24 lg:px-[120px]">
-          <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 text-center">
-            <span className="text-[12px] font-bold tracking-[0.2em] text-[#14B8A6]">FEATURES</span>
-            <h2 className="text-[30px] font-extrabold leading-[1.15] tracking-[-0.025em] md:text-[40px]">
-              Everything you need to ship migrations
-            </h2>
-            <p className="max-w-[640px] text-[15px] leading-[1.6] text-fd-muted-foreground md:text-[16px]">
-              A Laravel-inspired workflow, rebuilt from scratch for idiomatic Go. No ORM lock-in, no magic — just fast, predictable schema management.
-            </p>
-          </div>
-          <div className="mt-10 grid gap-5 md:mt-12 md:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
-              <Link
-                key={f.title}
-                href={f.href}
-                className="group flex flex-col gap-4 rounded-2xl border border-fd-border bg-fd-card p-7 no-underline transition-colors hover:border-[#14B8A6]/30 hover:bg-fd-accent/30"
-              >
-                <span className={`inline-flex h-11 w-11 items-center justify-center rounded-[10px] ${f.color}`}>
-                  {f.icon}
-                </span>
-                <h3 className="text-[18px] font-bold text-fd-foreground">{f.title}</h3>
-                <p className="text-[14px] leading-[1.6] text-fd-muted-foreground">{f.description}</p>
-              </Link>
-            ))}
           </div>
         </div>
       </section>
@@ -598,7 +474,7 @@ func (m *CreateUsers) Up(s *schema.Builder) {
               <FooterCol
                 title="LEGAL"
                 links={[
-                  { label: "MIT License", href: `${GITHUB_URL}/blob/main/LICENSE`, external: true },
+                  { label: "MIT License", href: `${GITHUB_URL}/blob/master/LICENSE`, external: true },
                   { label: "Code of Conduct", href: "/docs" },
                   { label: "Security", href: "/docs" },
                   { label: "Privacy", href: "/docs" },
