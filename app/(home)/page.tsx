@@ -331,18 +331,18 @@ func (m *CreateUsers) Up(s *schema.Builder) {
               Install the CLI, scaffold a migration, and run it. That&apos;s it.
             </p>
           </div>
-          <div className="mt-10 grid gap-6 md:mt-12 md:grid-cols-3">
+          <div className="mt-10 grid gap-5 sm:gap-6 md:mt-12 md:grid-cols-3">
             {quickStartSteps.map((step) => (
               <div key={step.num} className="flex flex-col gap-4">
                 <div className="flex items-center gap-3">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#14B8A6] text-[13px] font-bold text-white">
+                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#14B8A6] text-[13px] font-bold text-white">
                     {step.num}
                   </span>
                   <span className="text-[16px] font-bold text-fd-foreground">{step.label}</span>
                 </div>
                 <p className="text-[14px] leading-[1.6] text-fd-muted-foreground">{step.description}</p>
-                <div className="overflow-hidden rounded-[10px] border border-zinc-800 bg-[#0A0A0A]">
-                  <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
+                <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[10px] border border-zinc-800 bg-[#0A0A0A]">
+                  <div className="flex items-center border-b border-zinc-800 px-3 py-2">
                     <div className="flex items-center gap-1.5">
                       <svg
                         viewBox="0 0 24 24"
@@ -359,7 +359,9 @@ func (m *CreateUsers) Up(s *schema.Builder) {
                       <span className="font-mono text-[11px] font-medium text-zinc-400">bash</span>
                     </div>
                   </div>
-                  <pre className={`overflow-x-auto p-4 font-mono text-[12px] leading-[1.7] ${step.codeColor}`}>
+                  <pre
+                    className={`min-w-0 flex-1 px-4 py-3.5 font-mono text-[12.5px] leading-[1.65] whitespace-pre-wrap break-words ${step.codeColor}`}
+                  >
                     {step.code}
                   </pre>
                 </div>
