@@ -10,10 +10,15 @@ export default function Layout({ children }: { children: ReactNode }) {
       nav={{
         title: (
           <>
-            <Image src="/go-migrator-transparent.png" alt="go-migration" width={28} height={28} />
-            Go Migration
+            <Image src="/icon-migrator-transparent.png" alt="go-migration" width={28} height={28} />
+            <span className="font-bold text-[15px]">go-migration</span>
           </>
         ),
+      }}
+      githubUrl="https://github.com/gopackx/go-migration"
+      sidebar={{
+        defaultOpenLevel: 1,
+        collapsible: true,
       }}
     >
       {children}

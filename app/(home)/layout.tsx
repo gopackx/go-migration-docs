@@ -9,10 +9,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         title: (
           <>
             <Image src="/icon-migrator-transparent.png" alt="go-migration" width={28} height={28} />
-            GO MIGRATION
+            go-migration
           </>
         ),
       }}
+      searchToggle={{ enabled: false }}
       githubUrl="https://github.com/gopackx/go-migration"
     >
       {children}
