@@ -13,18 +13,21 @@ const quickStartSteps = [
     label: "Install",
     description: "Install the CLI with a single go install command.",
     code: "$ go install github.com/gopackx/go-migration@latest\n ",
+    copyText: "go install github.com/gopackx/go-migration@latest",
   },
   {
     num: 2,
     label: "Scaffold",
     description: "Generate a migration file with a sensible template.",
     code: "$ go-migration make:migration create_users_table\n ",
+    copyText: "go-migration make:migration create_users_table",
   },
   {
     num: 3,
     label: "Migrate",
     description: "Apply pending migrations to your database.",
     code: "$ go-migration migrate\n  ✔ 001_create_users_table",
+    copyText: "go-migration migrate",
   },
 ];
 
@@ -52,6 +55,7 @@ const features = [
     title: "Struct-Based Migrations",
     color: "#14B8A6",
     shadow: "#14B8A6",
+    href: "/docs/migrations/defining-migrations",
     description:
       "Define migrations as Go structs with explicit Up and Down methods. Type-safe, testable, and plays nicely with your existing codebase.",
   },
@@ -60,6 +64,7 @@ const features = [
     title: "Fluent Schema Builder",
     color: "#3B82F6",
     shadow: "#3B82F6",
+    href: "/docs/schema-builder/creating-tables",
     description:
       "Chainable API for creating tables, columns, indexes, and foreign keys. Write expressive schemas without touching raw SQL.",
   },
@@ -68,6 +73,7 @@ const features = [
     title: "Seeders & Factories",
     color: "#10B981",
     shadow: "#22C55E",
+    href: "/docs/seeders/defining-seeders",
     description:
       "Populate databases with realistic test data using composable factories and deterministic seeders. Perfect for dev and CI.",
   },
@@ -76,6 +82,7 @@ const features = [
     title: "CLI Commands",
     color: "#F59E0B",
     shadow: "#F59E0B",
+    href: "/docs/cli",
     description:
       "A single-binary CLI for migrate, rollback, refresh, scaffold, and more. Artisan-style ergonomics with Go-native performance.",
   },
@@ -84,6 +91,7 @@ const features = [
     title: "Multi-Database Support",
     color: "#EC4899",
     shadow: "#EC4899",
+    href: "/docs/database-grammars",
     description:
       "First-class drivers for PostgreSQL, MySQL/MariaDB, and SQLite — with dialect-aware SQL generation and transactional DDL where supported.",
   },
@@ -92,6 +100,7 @@ const features = [
     title: "Framework Agnostic",
     color: "#06B6D4",
     shadow: "#06B6D4",
+    href: "/docs/framework-integration/gin",
     description:
       "Drop it into any Go project — Gin, Echo, Fiber, Chi, or plain net/http. No framework coupling, no global state, no init surprises.",
   },
@@ -162,7 +171,7 @@ function MiniCopyButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       aria-label="Copy code"
-      className="inline-flex items-center gap-1 rounded-[5px] bg-[#14141A] px-1.5 py-0.5 text-zinc-400 transition-colors hover:bg-[#1F1F26] hover:text-white dark:bg-[#E4E4E7] dark:text-zinc-600 dark:hover:bg-[#D4D4D8] dark:hover:text-zinc-900"
+      className="inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white dark:text-zinc-500 dark:hover:bg-black/10 dark:hover:text-zinc-900"
     >
       {copied ? (
         <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -303,8 +312,8 @@ export default function HomePage() {
           </div>
           {/* Code card */}
           <div className="overflow-hidden rounded-2xl border border-fd-border bg-[#0A0A0A] dark:bg-[#FAFAFA] shadow-[0_20px_48px_-8px_rgba(168,85,247,0.12),_0_8px_24px_-6px_rgba(0,0,0,0.08)] dark:shadow-[0_20px_48px_-8px_rgba(20,184,166,0.40),_0_8px_24px_-6px_rgba(13,148,136,0.20)]">
-            <div className="flex items-center justify-between border-b border-zinc-800 dark:border-zinc-200 px-4 py-3">
-              <div className="flex items-center gap-2">
+            <div className="relative flex items-center justify-center border-b border-zinc-800 dark:border-zinc-200 px-4 py-3">
+              <div className="absolute left-4 flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
                 <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
                 <span className="h-3 w-3 rounded-full bg-[#28C840]" />
@@ -343,10 +352,14 @@ func (m *CreateUsers) Up(s *schema.Builder) {
           </div>
           <div className="mt-10 grid gap-5 md:mt-12 md:grid-cols-2 lg:grid-cols-3">
             {features.map((f) => (
-              <div
+              <Link
                 key={f.title}
-                className="flex flex-col gap-4 rounded-[18px] border border-fd-border bg-fd-card p-7 shadow-[0_2px_6px_rgba(10,10,10,0.06),_0_12px_28px_-6px_rgba(10,10,10,0.12)] dark:shadow-[0_10px_24px_-6px_var(--card-glow),_0_1px_0_rgba(255,255,255,0.08)]"
-                style={{ "--card-glow": `${f.shadow}26` } as React.CSSProperties}
+                href={f.href}
+                className="group flex flex-col gap-4 rounded-[18px] border border-fd-border bg-fd-card p-7 no-underline shadow-[0_2px_6px_rgba(10,10,10,0.06),_0_12px_28px_-6px_rgba(10,10,10,0.12)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_10px_rgba(10,10,10,0.08),_0_20px_36px_-8px_var(--card-glow)] dark:shadow-[0_10px_24px_-6px_var(--card-glow),_0_1px_0_rgba(255,255,255,0.08)] dark:hover:shadow-[0_18px_36px_-8px_var(--card-glow-strong),_0_1px_0_rgba(255,255,255,0.12)]"
+                style={{
+                  "--card-glow": `${f.shadow}26`,
+                  "--card-glow-strong": `${f.shadow}59`,
+                } as React.CSSProperties}
               >
                 <span
                   className="inline-flex h-11 w-11 items-center justify-center rounded-[10px]"
@@ -356,7 +369,7 @@ func (m *CreateUsers) Up(s *schema.Builder) {
                 </span>
                 <h3 className="text-[18px] font-bold text-fd-foreground">{f.title}</h3>
                 <p className="text-[14px] leading-[1.6] text-fd-muted-foreground">{f.description}</p>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -385,7 +398,7 @@ func (m *CreateUsers) Up(s *schema.Builder) {
                 </div>
                 <p className="text-[14px] leading-[1.6] text-fd-muted-foreground">{step.description}</p>
                 <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[10px] border border-zinc-800 bg-[#0A0A0A] dark:border-zinc-200 dark:bg-[#FAFAFA]">
-                  <div className="flex items-center border-b border-zinc-800 px-3 py-2 dark:border-zinc-200">
+                  <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2 dark:border-zinc-200">
                     <div className="flex items-center gap-1.5">
                       <svg
                         viewBox="0 0 24 24"
@@ -401,6 +414,7 @@ func (m *CreateUsers) Up(s *schema.Builder) {
                       </svg>
                       <span className="font-mono text-[11px] font-medium text-zinc-400 dark:text-zinc-600">bash</span>
                     </div>
+                    <CopyButton text={step.copyText} />
                   </div>
                   <pre
                     className="min-w-0 flex-1 px-4 py-3.5 font-mono text-[12.5px] leading-[1.65] whitespace-pre-wrap break-words text-white dark:text-[#0A0A0A]"
@@ -541,8 +555,8 @@ func (m *CreateUsers) Up(s *schema.Builder) {
       <section className="border-t border-fd-border">
         <div className="mx-auto w-full max-w-[1440px] px-5 py-16 md:px-16 md:py-24 lg:px-[120px]">
           <div className="relative flex flex-col items-center gap-6 overflow-hidden rounded-[28px] bg-gradient-to-br from-[#2DD4BF] via-[#14B8A6] to-[#0D9488] dark:from-[#0F766E] dark:via-[#0D9488] dark:to-[#042F2E] px-6 py-14 text-center shadow-[0_20px_50px_-10px_rgba(20,184,166,0.25),_0_8px_24px_-6px_rgba(13,148,136,0.20),_0_1px_0_rgba(255,255,255,0.25)] dark:shadow-[0_24px_60px_-12px_rgba(13,148,136,0.40),_0_8px_24px_-6px_rgba(0,0,0,0.30),_0_1px_0_rgba(255,255,255,0.12)] md:px-20 md:py-16">
-            <span aria-hidden className="pointer-events-none absolute -left-[120px] -top-[140px] h-[420px] w-[420px] rounded-full bg-[#5EEAD4]/40 blur-[90px] dark:-left-[140px] dark:-top-[160px] dark:h-[460px] dark:w-[460px] dark:bg-[#14B8A6]/40 dark:blur-[100px]" />
-            <span aria-hidden className="pointer-events-none absolute left-[720px] top-[180px] h-[520px] w-[520px] rounded-full bg-[#0F766E]/50 blur-[120px] dark:left-[740px] dark:top-[160px] dark:h-[560px] dark:w-[560px] dark:bg-[#14B8A6]/50 dark:blur-[140px]" />
+            <span aria-hidden className="pointer-events-none absolute -left-[120px] -top-[160px] h-[640px] w-[640px] rounded-full bg-[#5EEAD4]/80 blur-[100px] mix-blend-screen dark:-left-[100px] dark:-top-[140px] dark:h-[600px] dark:w-[600px] dark:bg-[#A7F3D0]/50 dark:blur-[80px] dark:mix-blend-normal" />
+            <span aria-hidden className="pointer-events-none absolute left-[520px] top-[80px] h-[760px] w-[760px] rounded-full bg-[#134E4A]/70 blur-[140px] mix-blend-multiply dark:left-[480px] dark:top-[40px] dark:h-[680px] dark:w-[680px] dark:bg-[#5EEAD4]/45 dark:blur-[100px] dark:mix-blend-normal" />
             <span className="relative inline-flex items-center gap-2 rounded-full bg-white/20 dark:bg-white/[0.12] px-3.5 py-1.5 text-[11px] font-semibold tracking-[0.12em] text-[#0A0A0A] dark:text-white">
               <span className="h-2 w-2 rounded-full bg-white" />
               OPEN SOURCE · MIT LICENSE

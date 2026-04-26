@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   description:
     "A Laravel-inspired database migration and seeding system for Go. Struct-based migrations, fluent schema builder, seeders, factories, and CLI.",
   openGraph: {
-    title: "go-migration — Database Migrations for Go",
+    title: "Go Migration — Database Migrations for Go",
     description:
       "A Laravel-inspired database migration and seeding system for Go. Struct-based migrations, fluent schema builder, seeders, factories, and CLI.",
     siteName: "go-migration",

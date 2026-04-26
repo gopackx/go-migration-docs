@@ -4,7 +4,8 @@
       "mcp__pencil__get_screenshot",
       "mcp__pencil__batch_get",
       "Bash(npx tsc *)",
-      "Bash(./node_modules/.bin/next build *)"
+      "Bash(./node_modules/.bin/next build *)",
+      "Bash(npm run *)"
     ]
   }
 }

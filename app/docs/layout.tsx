@@ -11,7 +11,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         title: (
           <>
             <Image src="/icon-migrator-transparent.png" alt="go-migration" width={28} height={28} />
-            <span className="font-bold text-[15px]">go-migration</span>
+            <span className="font-bold text-[15px]">Go Migration</span>
           </>
         ),
       }}
