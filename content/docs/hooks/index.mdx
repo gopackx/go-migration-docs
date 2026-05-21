@@ -11,24 +11,31 @@ go-migration lets you register **hooks** that run custom logic before and after 
 
 Two hooks are available:
 
-- `m.BeforeMigrate()` — runs before any migration is applied
-- `m.AfterMigrate()` — runs after all migrations have been applied
+- `m.BeforeMigrate()` — runs before **each** migration is applied
+- `m.AfterMigrate()` — runs after **each** migration is applied
+
+<Callout type="info">
+  Hooks fire **per migration**, not once for the whole run. If a single `m.Up()`
+  applies three migrations, each hook is invoked three times — once for each
+  migration. The same applies to `Rollback()`, `Reset()`, `Refresh()`, and
+  `Fresh()`, where hooks fire for each migration that runs.
+</Callout>
 
 ## BeforeMigrate
 
-Register a function that runs **before** migrations execute. The callback receives no arguments and returns an `error`.
+Register a function that runs **before each** migration executes. The callback receives the migration `name` and the `direction` (`"up"` or `"down"`) and returns an `error`.
 
 ```go title="main.go"
-m.BeforeMigrate(func() error {
-    log.Println("Starting migration...")
+m.BeforeMigrate(func(name, direction string) error {
+    log.Printf("Starting %s %s...", direction, name)
     return nil
 })
 ```
 
-If the `BeforeMigrate` hook returns an error, the migration is **aborted** and no changes are applied to the database.
+If a `BeforeMigrate` hook returns an error, that migration is **aborted** and no further migrations run.
 
 ```go title="main.go"
-m.BeforeMigrate(func() error {
+m.BeforeMigrate(func(name, direction string) error {
     if !isMaintenanceWindow() {
         return fmt.Errorf("migrations are only allowed during maintenance windows")
     }
@@ -37,26 +44,27 @@ m.BeforeMigrate(func() error {
 ```
 
 <Callout type="warn">
-  A `BeforeMigrate` hook error stops the entire migration process. Use this to enforce preconditions that must be met before any schema changes are made.
+  A `BeforeMigrate` hook error stops the migration process at the current
+  migration. Migrations already applied in this run remain applied. Use this to
+  enforce preconditions before each schema change.
 </Callout>
 
 ## AfterMigrate
 
-Register a function that runs **after** migrations complete successfully. Like `BeforeMigrate`, the callback returns an `error`.
+Register a function that runs **after each** migration completes. The callback receives the migration `name`, the `direction` (`"up"` or `"down"`), and the `duration` it took, and returns an `error`.
 
 ```go title="main.go"
-m.AfterMigrate(func() error {
-    log.Println("Migrations completed successfully!")
+m.AfterMigrate(func(name, direction string, duration time.Duration) error {
+    log.Printf("Finished %s %s in %s", direction, name, duration)
     return nil
 })
 ```
 
-If the `AfterMigrate` hook returns an error, the error is **logged** but does **not** roll back the migrations. The schema changes remain applied.
+If an `AfterMigrate` hook returns an error, the error is **ignored** and execution continues. The schema change remains applied.
 
 ```go title="main.go"
-m.AfterMigrate(func() error {
-    err := notifySlack("Migrations applied to production")
-    if err != nil {
+m.AfterMigrate(func(name, direction string, duration time.Duration) error {
+    if err := notifySlack(fmt.Sprintf("%s %s applied", direction, name)); err != nil {
         return fmt.Errorf("failed to send Slack notification: %w", err)
     }
     return nil
@@ -64,15 +72,17 @@ m.AfterMigrate(func() error {
 ```
 
 <Callout type="info">
-  `AfterMigrate` hook errors are logged without rolling back. This is by design — migrations have already been applied and committed, so the hook failure is treated as a non-critical side effect.
+  `AfterMigrate` hook errors are ignored without rolling back. This is by design —
+  the migration has already been applied and committed, so the hook failure is
+  treated as a non-critical side effect.
 </Callout>
 
 ## Error Behavior Summary
 
-| Hook | On Error | Migrations |
-|------|----------|------------|
-| `BeforeMigrate` | Aborts | Not executed |
-| `AfterMigrate` | Logged only | Already applied, not rolled back |
+| Hook | Signature | On Error | Migrations |
+|------|-----------|----------|------------|
+| `BeforeMigrate` | `func(name, direction string) error` | Aborts current migration | Earlier ones stay applied; current and later not executed |
+| `AfterMigrate` | `func(name, direction string, duration time.Duration) error` | Ignored | Already applied, not rolled back |
 
 ## Complete Example
 
@@ -89,7 +99,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
 )
 
 func main() {
@@ -101,11 +111,11 @@ func main() {
 
     m := migrator.New(db)
 
-    // Log migration start time and validate preconditions
-    m.BeforeMigrate(func() error {
-        log.Printf("Migration started at %s", time.Now().Format(time.RFC3339))
+    // Runs before each migration: log it and validate preconditions
+    m.BeforeMigrate(func(name, direction string) error {
+        log.Printf("[%s] %s starting at %s", direction, name, time.Now().Format(time.RFC3339))
 
-        // Example: check a precondition before allowing migrations
+        // Example: check a precondition before allowing this migration
         if err := db.Ping(); err != nil {
             return fmt.Errorf("database is not reachable: %w", err)
         }
@@ -113,12 +123,12 @@ func main() {
         return nil
     })
 
-    // Log completion and send a notification
-    m.AfterMigrate(func() error {
-        log.Printf("Migration completed at %s", time.Now().Format(time.RFC3339))
+    // Runs after each migration: log completion and send a notification
+    m.AfterMigrate(func(name, direction string, duration time.Duration) error {
+        log.Printf("[%s] %s completed in %s", direction, name, duration)
 
-        // Example: send a notification (failure won't roll back migrations)
-        if err := sendNotification("Migrations applied successfully"); err != nil {
+        // Example: send a notification (failure won't roll back the migration)
+        if err := sendNotification(fmt.Sprintf("%s %s applied", direction, name)); err != nil {
             return fmt.Errorf("notification failed: %w", err)
         }
 
@@ -126,7 +136,7 @@ func main() {
     })
 
     // Register migrations...
-    // m.Register("20240101_000001_create_users_table", &CreateUsersTable{})
+    // m.Register("20240101000001_create_users_table", &CreateUsersTable{})
 
     if err := m.Up(); err != nil {
         log.Fatal(err)
@@ -142,9 +152,9 @@ func sendNotification(message string) error {
 
 ## Use Cases
 
-- **Logging** — record when migrations start and finish for audit trails
-- **Notifications** — send Slack or email alerts when migrations run in production
-- **Precondition checks** — verify the database is reachable or that a maintenance window is active before applying changes
+- **Logging** — record when each migration starts and finishes (with its name, direction, and duration) for audit trails
+- **Notifications** — send Slack or email alerts as migrations run in production
+- **Precondition checks** — verify the database is reachable or that a maintenance window is active before applying each change
 - **Cache invalidation** — clear application caches after schema changes
 
 ## What's Next?

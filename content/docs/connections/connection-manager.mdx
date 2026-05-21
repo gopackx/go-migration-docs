@@ -14,7 +14,7 @@ The connection manager lets you configure and work with multiple database connec
 Create a new connection manager with `database.NewManager()`:
 
 ```go
-import "github.com/gopackx/go-migration/database"
+import "github.com/gopackx/go-migration/pkg/database"
 
 mgr := database.NewManager()
 defer mgr.Close()
@@ -24,46 +24,64 @@ The manager holds all your named connections and handles their lifecycle.
 
 ## Registering Drivers
 
-Before adding connections, register the database drivers you plan to use:
+Before adding connections, register the database drivers you plan to use. `RegisterDriver` takes the driver name and a `Driver` value — use the constructors from the `drivers` sub-package:
 
 ```go
 import (
-    "github.com/gopackx/go-migration/database"
+    "github.com/gopackx/go-migration/pkg/database"
+    "github.com/gopackx/go-migration/pkg/database/drivers"
     _ "github.com/lib/pq"
     _ "github.com/go-sql-driver/mysql"
 )
 
 mgr := database.NewManager()
-mgr.RegisterDriver("postgres", "postgres")
-mgr.RegisterDriver("mysql", "mysql")
+mgr.RegisterDriver("postgres", drivers.NewPostgresDriver())
+mgr.RegisterDriver("mysql", drivers.NewMySQLDriver())
 ```
 
-| Parameter | Description |
-|-----------|-------------|
-| First argument | A name you assign to this driver registration |
-| Second argument | The driver name as registered with `database/sql` |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| First argument | `string` | The driver name connections reference via their `Driver` field |
+| Second argument | `database.Driver` | A driver implementation, e.g. `drivers.NewPostgresDriver()`, `drivers.NewMySQLDriver()`, `drivers.NewSQLiteDriver()` |
 
 ## Adding Connections
 
-Use `mgr.AddConnection()` to register a named connection with its DSN and pool settings:
+Use `mgr.AddConnection()` to register a named connection with its discrete connection fields and pool settings. There is no `DSN` field — the driver builds the DSN from these fields. `AddConnection` returns an `error`:
 
 ```go
-mgr.AddConnection("primary", database.ConnectionConfig{
-    Driver:         "postgres",
-    DSN:            "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
-    MaxOpenConns:   25,
-    MaxIdleConns:   5,
+err := mgr.AddConnection("primary", database.ConnectionConfig{
+    Driver:          "postgres",
+    Host:            "localhost",
+    Port:            5432,
+    Database:        "myapp",
+    Username:        "user",
+    Password:        "pass",
+    MaxOpenConns:    25,
+    MaxIdleConns:    5,
     ConnMaxLifetime: 5 * time.Minute,
+    Options:         map[string]string{"sslmode": "disable"},
 })
+if err != nil {
+    log.Fatalf("add connection: %v", err)
+}
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `Driver` | `string` | Name of the registered driver |
-| `DSN` | `string` | Data source name (connection string) |
+| `Host` | `string` | Database server hostname or IP |
+| `Port` | `int` | Database server port |
+| `Database` | `string` | Database name (or file path for SQLite) |
+| `Username` | `string` | Database user |
+| `Password` | `string` | Database password |
 | `MaxOpenConns` | `int` | Maximum number of open connections |
 | `MaxIdleConns` | `int` | Maximum number of idle connections |
 | `ConnMaxLifetime` | `time.Duration` | Maximum lifetime of a connection |
+| `Options` | `map[string]string` | Driver-specific options, e.g. `{"sslmode": "disable"}` for PostgreSQL |
+
+<Callout type="info">
+  The first connection added becomes the default automatically. Use `mgr.SetDefault(name)` to choose a different default and `mgr.Default()` to retrieve the default `*sql.DB`.
+</Callout>
 
 ## Retrieving Connections
 
@@ -80,8 +98,27 @@ rows, err := db.Query("SELECT id, name FROM users")
 ```
 
 <Callout type="info">
-  `Connection()` returns a standard `*sql.DB`, so you can use it with any Go database library or ORM — not just go-migration.
+  `Connection()` returns a standard `*sql.DB`, so you can use it with any Go database library or ORM — not just go-migration. Connections are opened lazily on first request and cached for reuse.
 </Callout>
+
+## The Default Connection
+
+The first connection added with `AddConnection()` automatically becomes the default. You can change it with `SetDefault()` and retrieve the default `*sql.DB` with `Default()`:
+
+```go
+// Choose which named connection is the default.
+if err := mgr.SetDefault("primary"); err != nil {
+    log.Fatalf("set default: %v", err)
+}
+
+// Retrieve the default connection.
+db, err := mgr.Default()
+if err != nil {
+    log.Fatalf("get default connection: %v", err)
+}
+```
+
+`SetDefault` returns an error if the named connection has not been registered. `Default` returns an error if no default has been set.
 
 ## Closing Connections
 
@@ -108,7 +145,8 @@ import (
     "log"
     "time"
 
-    "github.com/gopackx/go-migration/database"
+    "github.com/gopackx/go-migration/pkg/database"
+    "github.com/gopackx/go-migration/pkg/database/drivers"
     _ "github.com/lib/pq"
     _ "github.com/go-sql-driver/mysql"
 )
@@ -118,26 +156,40 @@ func main() {
     defer mgr.Close()
 
     // Register drivers
-    mgr.RegisterDriver("postgres", "postgres")
-    mgr.RegisterDriver("mysql", "mysql")
+    mgr.RegisterDriver("postgres", drivers.NewPostgresDriver())
+    mgr.RegisterDriver("mysql", drivers.NewMySQLDriver())
 
     // Add PostgreSQL connection
-    mgr.AddConnection("primary", database.ConnectionConfig{
+    if err := mgr.AddConnection("primary", database.ConnectionConfig{
         Driver:          "postgres",
-        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        Host:            "localhost",
+        Port:            5432,
+        Database:        "myapp",
+        Username:        "user",
+        Password:        "pass",
         MaxOpenConns:    25,
         MaxIdleConns:    5,
         ConnMaxLifetime: 5 * time.Minute,
-    })
+        Options:         map[string]string{"sslmode": "disable"},
+    }); err != nil {
+        log.Fatalf("add primary: %v", err)
+    }
 
     // Add MySQL connection
-    mgr.AddConnection("analytics", database.ConnectionConfig{
+    if err := mgr.AddConnection("analytics", database.ConnectionConfig{
         Driver:          "mysql",
-        DSN:             "user:pass@tcp(localhost:3306)/analytics?parseTime=true",
+        Host:            "localhost",
+        Port:            3306,
+        Database:        "analytics",
+        Username:        "user",
+        Password:        "pass",
         MaxOpenConns:    10,
         MaxIdleConns:    3,
         ConnMaxLifetime: 5 * time.Minute,
-    })
+        Options:         map[string]string{"parseTime": "true"},
+    }); err != nil {
+        log.Fatalf("add analytics: %v", err)
+    }
 
     // Use the PostgreSQL connection
     primaryDB, err := mgr.Connection("primary")

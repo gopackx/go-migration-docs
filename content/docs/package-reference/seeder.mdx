@@ -7,9 +7,9 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 # Seeder API
 
-The seeder system lets you populate your database with test or default data. It consists of the `Seeder` interface, the `Runner` for execution, and an optional `DependsOn` interface for ordering.
+The seeder system lets you populate your database with test or default data. It consists of the `Seeder` interface, the `Registry` for registration, the `Runner` for execution, and an optional `DependentSeeder` interface for ordering.
 
-**Import path:** `github.com/gopackx/go-migration/seeder`
+**Import path:** `github.com/gopackx/go-migration/pkg/seeder`
 
 For conceptual documentation, see [Seeders](/docs/seeders/defining-seeders).
 
@@ -60,14 +60,14 @@ func AutoRegister(name string, s Seeder)
 | `name` | `string` | Unique name for this seeder |
 | `s` | `Seeder` | Pointer to a struct implementing the `Seeder` interface |
 
-**Panics** if the name is a duplicate — fail-fast at startup.
+**Panics** if the name is a duplicate or empty/whitespace-only — fail-fast at startup.
 
 ```go title="seeders/user_seeder.go"
 package seeders
 
 import (
     "database/sql"
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/seeder"
 )
 
 func init() {
@@ -93,12 +93,13 @@ See [Running Seeders](/docs/seeders/running-seeders).
 
 ---
 
-## DependsOn Interface
+## DependentSeeder Interface
 
-Optionally implement `DependsOn` to declare that a seeder must run after other seeders.
+Optionally implement `DependentSeeder` to declare that a seeder must run after other seeders.
 
 ```go
-type DependsOnProvider interface {
+type DependentSeeder interface {
+    Seeder
     DependsOn() []string
 }
 ```
@@ -218,50 +219,118 @@ See [Seeder Rollback](/docs/seeders/rollback).
 
 ---
 
-## `seeder.NewRunner()`
+## `seeder.NewRegistry()`
 
-Creates a new seeder runner bound to a database connection.
+Creates an empty seeder registry. Seeders are registered on the registry, which is then handed to a `Runner`.
 
 ```go
-func NewRunner(db *sql.DB) *Runner
+func NewRegistry() *Registry
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `db` | `*sql.DB` | The database connection for seeders to use |
-
-**Returns:** `*Runner`
+**Returns:** `*Registry`
 
 ```go
-import "github.com/gopackx/go-migration/seeder"
+import "github.com/gopackx/go-migration/pkg/seeder"
 
-runner := seeder.NewRunner(db)
+reg := seeder.NewRegistry()
 ```
 
 ---
 
-## `runner.Register()`
+## `registry.Register()`
 
-Registers a seeder with the runner under a unique name.
+Registers a seeder with the registry under a unique name. Names must be non-empty and unique.
 
 ```go
-func (r *Runner) Register(name string, s Seeder)
+func (r *Registry) Register(name string, s Seeder) error
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `name` | `string` | Unique name for this seeder |
+| `name` | `string` | Unique, non-empty name for this seeder |
 | `s` | `Seeder` | Pointer to a struct implementing the `Seeder` interface |
 
+**Returns:** `error` — wraps `ErrInvalidSeederName` if the name is empty/whitespace, or `ErrDuplicateSeeder` if the name is already registered.
+
 ```go
-runner.Register("UserSeeder", &seeders.UserSeeder{})
-runner.Register("PostSeeder", &seeders.PostSeeder{})
-runner.Register("RoleSeeder", &seeders.RoleSeeder{})
+reg := seeder.NewRegistry()
+if err := reg.Register("UserSeeder", &seeders.UserSeeder{}); err != nil {
+    log.Fatal(err)
+}
+if err := reg.Register("PostSeeder", &seeders.PostSeeder{}); err != nil {
+    log.Fatal(err)
+}
 ```
 
 <Callout type="info">
   The name passed to `Register()` is used to reference the seeder in `Run()` and in `DependsOn()` declarations.
 </Callout>
+
+---
+
+## `registry.Get()`
+
+Retrieves a registered seeder by name.
+
+```go
+func (r *Registry) Get(name string) (Seeder, error)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | The name used in `Register()` |
+
+**Returns:** `(Seeder, error)` — returns the seeder, or `ErrSeederNotFound` if no seeder is registered under that name.
+
+---
+
+## `registry.GetAll()`
+
+Returns a copy of all registered seeders keyed by name.
+
+```go
+func (r *Registry) GetAll() map[string]Seeder
+```
+
+**Returns:** `map[string]Seeder` — a defensive copy of the registry contents.
+
+---
+
+## `seeder.NewRunner()`
+
+Creates a new seeder runner from a registry and a database connection.
+
+```go
+func NewRunner(registry *Registry, db *sql.DB, logger Logger) *Runner
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `registry` | `*Registry` | The registry holding the seeders to run |
+| `db` | `*sql.DB` | The database connection for seeders to use |
+| `logger` | `Logger` | Optional logger. May be `nil`, in which case logging is silently skipped |
+
+**Returns:** `*Runner`
+
+```go
+import "github.com/gopackx/go-migration/pkg/seeder"
+
+reg := seeder.NewRegistry()
+if err := reg.Register("UserSeeder", &seeders.UserSeeder{}); err != nil {
+    log.Fatal(err)
+}
+
+runner := seeder.NewRunner(reg, db, nil)
+```
+
+The `Logger` interface is minimal:
+
+```go
+type Logger interface {
+    Info(msg string, args ...any)
+    Error(msg string, args ...any)
+}
+```
 
 ---
 
@@ -491,6 +560,34 @@ See [Batch Insert — Multi-Dialect Support](/docs/seeders/batch-insert).
 
 ---
 
+## Sentinel Errors
+
+The seeder package exports sentinel errors you can match with `errors.Is`.
+
+```go
+var (
+    ErrDuplicateSeeder    = errors.New("duplicate seeder name")
+    ErrInvalidSeederName  = errors.New("invalid seeder name")
+    ErrSeederNotFound     = errors.New("seeder not found")
+    ErrCircularDependency = errors.New("circular seeder dependency")
+)
+```
+
+| Error | Returned by | Meaning |
+|-------|-------------|---------|
+| `ErrDuplicateSeeder` | `Registry.Register` | A seeder is already registered under the given name |
+| `ErrInvalidSeederName` | `Registry.Register` | The name is empty or whitespace-only |
+| `ErrSeederNotFound` | `Registry.Get`, `Runner.Run`, `Runner.Rollback`, dependency resolution | No seeder is registered under the given name |
+| `ErrCircularDependency` | `Runner.RunAll`, `Runner.Run`, `Runner.RunByTag` | The dependency graph contains a cycle |
+
+```go
+if err := reg.Register("UserSeeder", &seeders.UserSeeder{}); errors.Is(err, seeder.ErrDuplicateSeeder) {
+    // handle duplicate
+}
+```
+
+---
+
 ## Complete Example
 
 ```go title="main.go"
@@ -502,7 +599,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/seeder"
     "your-project/seeders"
 )
 
@@ -513,11 +610,18 @@ func main() {
     }
     defer db.Close()
 
-    runner := seeder.NewRunner(db)
+    reg := seeder.NewRegistry()
+    for name, s := range map[string]seeder.Seeder{
+        "UserSeeder": &seeders.UserSeeder{},
+        "RoleSeeder": &seeders.RoleSeeder{},
+        "PostSeeder": &seeders.PostSeeder{},
+    } {
+        if err := reg.Register(name, s); err != nil {
+            log.Fatal(err)
+        }
+    }
 
-    runner.Register("UserSeeder", &seeders.UserSeeder{})
-    runner.Register("RoleSeeder", &seeders.RoleSeeder{})
-    runner.Register("PostSeeder", &seeders.PostSeeder{})
+    runner := seeder.NewRunner(reg, db, nil)
 
     if err := runner.RunAll(); err != nil {
         log.Fatal(err)
@@ -538,8 +642,11 @@ func main() {
 | Interface | `Tags` | `Tags() []string` | Assign tags (optional) |
 | Interface | `Rollback` | `Rollback(db *sql.DB) error` | Custom rollback logic (optional) |
 | Registry | `AutoRegister` | `AutoRegister(name, seeder)` | Register a seeder via `init()` |
-| Runner | `NewRunner` | `NewRunner(db) *Runner` | Create a runner |
-| Runner | `Register` | `Register(name, seeder)` | Register a seeder |
+| Registry | `NewRegistry` | `NewRegistry() *Registry` | Create a registry |
+| Registry | `Register` | `Register(name, seeder) error` | Register a seeder |
+| Registry | `Get` | `Get(name) (Seeder, error)` | Look up a seeder by name |
+| Registry | `GetAll` | `GetAll() map[string]Seeder` | Copy of all registered seeders |
+| Runner | `NewRunner` | `NewRunner(registry, db, logger) *Runner` | Create a runner |
 | Runner | `RunAll` | `RunAll() error` | Run all seeders |
 | Runner | `Run` | `Run(name) error` | Run a specific seeder |
 | Runner | `RunByTag` | `RunByTag(tag) error` | Run seeders matching a tag |

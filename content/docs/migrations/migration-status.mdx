@@ -18,7 +18,7 @@ if err != nil {
 }
 
 for _, s := range statuses {
-    fmt.Printf("Migration: %s | Ran: %v | Batch: %d\n", s.Name, s.Ran, s.Batch)
+    fmt.Printf("Migration: %s | Applied: %v | Batch: %d\n", s.Name, s.Applied, s.Batch)
 }
 ```
 
@@ -31,25 +31,26 @@ Each status entry contains:
 | Field | Type | Description |
 |-------|------|-------------|
 | `Name` | `string` | The migration name as passed to `m.Register()` |
-| `Ran` | `bool` | Whether the migration has been executed |
-| `Batch` | `int` | The batch number (0 if not yet run) |
+| `Applied` | `bool` | Whether the migration has been applied |
+| `Batch` | `int` | The batch number (0 if not yet applied) |
+| `AppliedAt` | `*time.Time` | When the migration was applied (`nil` if not yet applied) |
 
 ### Example Output
 
 Given these registered migrations:
 
 ```go
-m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
-m.Register("20240201_add_phone_to_users", &migrations.AddPhoneToUsers{})
+m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{})
+m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{})
+m.Register("20240201000001_add_phone_to_users", &migrations.AddPhoneToUsers{})
 ```
 
-If the first two have been executed, `m.Status()` produces:
+If the first two have been applied, `m.Status()` produces:
 
 ```
-Migration: 20240101_create_users_table   | Ran: true  | Batch: 1
-Migration: 20240115_create_posts_table   | Ran: true  | Batch: 1
-Migration: 20240201_add_phone_to_users   | Ran: false | Batch: 0
+Migration: 20240101000001_create_users_table   | Applied: true  | Batch: 1
+Migration: 20240115000001_create_posts_table   | Applied: true  | Batch: 1
+Migration: 20240201000001_add_phone_to_users   | Applied: false | Batch: 0
 ```
 
 ## Complete Example
@@ -64,7 +65,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     "your-project/migrations"
 )
 
@@ -77,9 +78,15 @@ func main() {
 
     m := migrator.New(db)
 
-    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
-    m.Register("20240201_add_phone_to_users", &migrations.AddPhoneToUsers{})
+    if err := m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := m.Register("20240201000001_add_phone_to_users", &migrations.AddPhoneToUsers{}); err != nil {
+        log.Fatal(err)
+    }
 
     statuses, err := m.Status()
     if err != nil {
@@ -90,8 +97,8 @@ func main() {
     fmt.Println("─────────────────────────────────────────────────────")
     for _, s := range statuses {
         status := "Pending"
-        if s.Ran {
-            status = fmt.Sprintf("Ran (Batch %d)", s.Batch)
+        if s.Applied {
+            status = fmt.Sprintf("Applied (Batch %d)", s.Batch)
         }
         fmt.Printf("  %s — %s\n", s.Name, status)
     }

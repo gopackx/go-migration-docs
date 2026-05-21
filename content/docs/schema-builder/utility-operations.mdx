@@ -30,8 +30,8 @@ s.DropIfExists("posts")
 This is the recommended approach in `Down` methods since it won't error if the table has already been removed:
 
 ```go
-func (m *CreatePostsTable) Down(s *schema.Builder) {
-    s.DropIfExists("posts")
+func (m *CreatePostsTable) Down(s *schema.Builder) error {
+    return s.DropIfExists("posts")
 }
 ```
 
@@ -49,26 +49,30 @@ The first argument is the current table name, and the second is the new name.
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 type RenamePostsToArticles struct{}
 
-func (m *RenamePostsToArticles) Up(s *schema.Builder) {
-    s.Rename("posts", "articles")
+func (m *RenamePostsToArticles) Up(s *schema.Builder) error {
+    return s.Rename("posts", "articles")
 }
 
-func (m *RenamePostsToArticles) Down(s *schema.Builder) {
-    s.Rename("articles", "posts")
+func (m *RenamePostsToArticles) Down(s *schema.Builder) error {
+    return s.Rename("articles", "posts")
 }
 ```
 
 ## Has Table
 
-Check if a table exists in the database:
+Check if a table exists in the database. It returns `(bool, error)`:
 
 ```go
-if s.HasTable("users") {
+exists, err := s.HasTable("users")
+if err != nil {
+    return err
+}
+if exists {
     // Table exists
 }
 ```
@@ -76,23 +80,32 @@ if s.HasTable("users") {
 This is useful for conditional logic in migrations:
 
 ```go
-func (m *ConditionalMigration) Up(s *schema.Builder) {
-    if !s.HasTable("settings") {
-        s.Create("settings", func(bp *schema.Blueprint) {
-            bp.ID("id")
+func (m *ConditionalMigration) Up(s *schema.Builder) error {
+    exists, err := s.HasTable("settings")
+    if err != nil {
+        return err
+    }
+    if !exists {
+        return s.Create("settings", func(bp *schema.Blueprint) {
+            bp.ID()
             bp.String("key", 255).Unique()
             bp.Text("value").Nullable()
         })
     }
+    return nil
 }
 ```
 
 ## Has Column
 
-Check if a column exists in a table:
+Check if a column exists in a table. Like `HasTable`, it returns `(bool, error)`:
 
 ```go
-if s.HasColumn("users", "phone") {
+exists, err := s.HasColumn("users", "phone")
+if err != nil {
+    return err
+}
+if exists {
     // Column exists
 }
 ```
@@ -100,12 +113,17 @@ if s.HasColumn("users", "phone") {
 Useful for safely adding columns that might already exist:
 
 ```go
-func (m *AddPhoneToUsers) Up(s *schema.Builder) {
-    if !s.HasColumn("users", "phone") {
-        s.Alter("users", func(bp *schema.Blueprint) {
+func (m *AddPhoneToUsers) Up(s *schema.Builder) error {
+    exists, err := s.HasColumn("users", "phone")
+    if err != nil {
+        return err
+    }
+    if !exists {
+        return s.Alter("users", func(bp *schema.Blueprint) {
             bp.String("phone", 20).Nullable()
         })
     }
+    return nil
 }
 ```
 
@@ -118,18 +136,18 @@ func (m *AddPhoneToUsers) Up(s *schema.Builder) {
 Execute arbitrary SQL statements directly, bypassing the fluent API. This is useful for materialized views, custom DDL, database-specific features, or anything the Schema Builder doesn't cover.
 
 ```go
-func (s *Builder) RawExec(statements ...string)
+func (s *Builder) RawExec(statements ...string) error
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `statements` | `...string` | One or more raw SQL statements to execute |
 
-Each statement is executed sequentially. Pass multiple statements as separate arguments:
+Each statement is executed sequentially, and `RawExec` returns an `error` if any statement fails. Pass multiple statements as separate arguments:
 
 ```go
-func (m *CreateReportViews) Up(s *schema.Builder) {
-    s.RawExec(
+func (m *CreateReportViews) Up(s *schema.Builder) error {
+    return s.RawExec(
         `CREATE MATERIALIZED VIEW monthly_sales AS
          SELECT date_trunc('month', created_at) AS month, SUM(amount) AS total
          FROM orders GROUP BY month`,
@@ -137,8 +155,8 @@ func (m *CreateReportViews) Up(s *schema.Builder) {
     )
 }
 
-func (m *CreateReportViews) Down(s *schema.Builder) {
-    s.RawExec(
+func (m *CreateReportViews) Down(s *schema.Builder) error {
+    return s.RawExec(
         "DROP MATERIALIZED VIEW IF EXISTS monthly_sales",
     )
 }
@@ -165,19 +183,19 @@ s.RawExec(
 ```
 
 <Callout type="warn">
-  `RawExec` mengirim SQL langsung ke database tanpa validasi grammar. Pastikan SQL yang ditulis kompatibel dengan driver database yang digunakan. Untuk operasi yang didukung fluent API (create table, alter, drop, dll.), tetap gunakan method Builder yang tersedia.
+  `RawExec` sends SQL directly to the database without grammar validation. Make sure the SQL you write is compatible with the database driver you are using. For operations supported by the fluent API (create table, alter, drop, etc.), prefer the available Builder methods.
 </Callout>
 
 ## Quick Reference
 
 | Method | Description |
 |--------|-------------|
-| `s.Drop(table)` | Drop a table (errors if not found) |
-| `s.DropIfExists(table)` | Drop a table if it exists |
-| `s.Rename(from, to)` | Rename a table |
-| `s.HasTable(table)` | Check if a table exists (returns `bool`) |
-| `s.HasColumn(table, column)` | Check if a column exists (returns `bool`) |
-| `s.RawExec(statements...)` | Execute raw SQL statements directly |
+| `s.Drop(table)` | Drop a table (errors if not found); returns `error` |
+| `s.DropIfExists(table)` | Drop a table if it exists; returns `error` |
+| `s.Rename(from, to)` | Rename a table; returns `error` |
+| `s.HasTable(table)` | Check if a table exists (returns `(bool, error)`) |
+| `s.HasColumn(table, column)` | Check if a column exists (returns `(bool, error)`) |
+| `s.RawExec(statements...)` | Execute raw SQL statements directly; returns `error` |
 
 ## What's Next?
 

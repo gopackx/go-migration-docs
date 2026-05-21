@@ -17,12 +17,21 @@ Configure pool behavior when adding a connection:
 ```go
 mgr.AddConnection("primary", database.ConnectionConfig{
     Driver:          "postgres",
-    DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+    Host:            "localhost",
+    Port:            5432,
+    Database:        "myapp",
+    Username:        "user",
+    Password:        "pass",
     MaxOpenConns:    25,
     MaxIdleConns:    5,
     ConnMaxLifetime: 5 * time.Minute,
+    Options:         map[string]string{"sslmode": "disable"},
 })
 ```
+
+<Callout type="info">
+  go-migration only applies a pool setting when its value is greater than zero. Leaving a field at its zero value keeps Go's `database/sql` default for that setting — go-migration does not impose its own defaults. When configuring via a JSON/YAML file, `conn_max_lifetime` must be a duration string such as `"5m"` (a bare number is interpreted as nanoseconds).
+</Callout>
 
 ### MaxOpenConns
 
@@ -44,7 +53,7 @@ Sets the maximum number of idle connections kept in the pool.
 MaxIdleConns: 5
 ```
 
-- Default: `2`
+- Default: `2` (this is Go's `database/sql` default; go-migration does not set it)
 - Idle connections are reused for new queries, avoiding the overhead of opening a new connection
 - Should be less than or equal to `MaxOpenConns`
 
@@ -73,10 +82,15 @@ ConnMaxLifetime: 5 * time.Minute
     ```go
     mgr.AddConnection("web", database.ConnectionConfig{
         Driver:          "postgres",
-        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        Host:            "localhost",
+        Port:            5432,
+        Database:        "myapp",
+        Username:        "user",
+        Password:        "pass",
         MaxOpenConns:    25,
         MaxIdleConns:    10,
         ConnMaxLifetime: 5 * time.Minute,
+        Options:         map[string]string{"sslmode": "disable"},
     })
     ```
 
@@ -92,10 +106,15 @@ ConnMaxLifetime: 5 * time.Minute
     ```go
     mgr.AddConnection("worker", database.ConnectionConfig{
         Driver:          "postgres",
-        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        Host:            "localhost",
+        Port:            5432,
+        Database:        "myapp",
+        Username:        "user",
+        Password:        "pass",
         MaxOpenConns:    10,
         MaxIdleConns:    5,
         ConnMaxLifetime: 10 * time.Minute,
+        Options:         map[string]string{"sslmode": "disable"},
     })
     ```
 
@@ -111,10 +130,15 @@ ConnMaxLifetime: 5 * time.Minute
     ```go
     mgr.AddConnection("cli", database.ConnectionConfig{
         Driver:          "postgres",
-        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        Host:            "localhost",
+        Port:            5432,
+        Database:        "myapp",
+        Username:        "user",
+        Password:        "pass",
         MaxOpenConns:    5,
         MaxIdleConns:    2,
         ConnMaxLifetime: 1 * time.Minute,
+        Options:         map[string]string{"sslmode": "disable"},
     })
     ```
 

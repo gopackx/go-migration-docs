@@ -28,10 +28,10 @@ If your migration state looks like this:
 
 | Migration | Batch |
 |-----------|-------|
-| `20240101_create_users_table` | 1 |
-| `20240115_create_posts_table` | 1 |
-| `20240201_add_phone_to_users` | 2 |
-| `20240215_create_comments_table` | 2 |
+| `20240101000001_create_users_table` | 1 |
+| `20240115000001_create_posts_table` | 1 |
+| `20240201000001_add_phone_to_users` | 2 |
+| `20240215000001_create_comments_table` | 2 |
 
 Calling `m.Rollback(0)` rolls back batch 2 — `create_comments_table` first, then `add_phone_to_users` (reverse order).
 
@@ -39,8 +39,8 @@ After rollback:
 
 | Migration | Batch |
 |-----------|-------|
-| `20240101_create_users_table` | 1 |
-| `20240115_create_posts_table` | 1 |
+| `20240101000001_create_users_table` | 1 |
+| `20240115000001_create_posts_table` | 1 |
 
 ## Step-Based Rollback
 
@@ -54,11 +54,11 @@ if err := m.Rollback(3); err != nil {
 ```
 
 Using the same example table above, `m.Rollback(3)` would roll back:
-1. `20240215_create_comments_table` (batch 2)
-2. `20240201_add_phone_to_users` (batch 2)
-3. `20240115_create_posts_table` (batch 1)
+1. `20240215000001_create_comments_table` (batch 2)
+2. `20240201000001_add_phone_to_users` (batch 2)
+3. `20240115000001_create_posts_table` (batch 1)
 
-Only `20240101_create_users_table` remains.
+Only `20240101000001_create_users_table` remains.
 
 ## Complete Example
 
@@ -71,7 +71,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     "your-project/migrations"
 )
 
@@ -84,9 +84,15 @@ func main() {
 
     m := migrator.New(db)
 
-    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
-    m.Register("20240201_add_phone_to_users", &migrations.AddPhoneToUsers{})
+    if err := m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := m.Register("20240201000001_add_phone_to_users", &migrations.AddPhoneToUsers{}); err != nil {
+        log.Fatal(err)
+    }
 
     // Roll back the last batch
     if err := m.Rollback(0); err != nil {

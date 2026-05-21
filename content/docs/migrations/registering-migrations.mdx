@@ -54,8 +54,8 @@ When you create a migration with `make:migration`, the generated file already in
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/migrator"
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 func init() {
@@ -89,7 +89,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     _ "your-project/database/migrations" // blank import triggers init() functions
 )
 
@@ -130,13 +130,17 @@ The blank import `_ "your-project/database/migrations"` triggers all `init()` fu
 
 ## Manual Registration
 
-You can also register migrations explicitly using `m.Register()`:
+You can also register migrations explicitly using `m.Register()`. `Register` returns an `error` — it wraps `ErrInvalidMigrationName` for a bad name format and `ErrDuplicateMigration` if the name is already registered:
 
 ```go title="main.go"
 m := migrator.New(db)
 
-m.Register("2025_01_15_143022_1234_create_users_table", &migrations.CreateUsersTable{})
-m.Register("2025_01_15_143045_5678_create_posts_table", &migrations.CreatePostsTable{})
+if err := m.Register("2025_01_15_143022_1234_create_users_table", &migrations.CreateUsersTable{}); err != nil {
+    log.Fatal(err)
+}
+if err := m.Register("2025_01_15_143045_5678_create_posts_table", &migrations.CreatePostsTable{}); err != nil {
+    log.Fatal(err)
+}
 
 if err := m.Up(); err != nil {
     log.Fatal(err)
@@ -151,10 +155,31 @@ Auto-discovery and manual registration can be used together. This is useful when
 m := migrator.New(db, migrator.WithAutoDiscover())
 
 // Additional migrations not yet converted to auto-discovery
-m.Register("2025_03_01_120000_9876_legacy_migration", &migrations.LegacyMigration{})
+if err := m.Register("2025_03_01_120000_9876_legacy_migration", &migrations.LegacyMigration{}); err != nil {
+    log.Fatal(err)
+}
 ```
 
 The migrator merges migrations from both sources in correct timestamp order. If the same name appears in both, `AutoDiscover()` returns an error (or `WithAutoDiscover()` panics).
+
+## Sentinel Errors
+
+`Register()` and `AutoDiscover()` wrap exported sentinel errors that you can inspect with `errors.Is`:
+
+| Error | Returned when |
+|-------|---------------|
+| `migrator.ErrInvalidMigrationName` | The name does not match the required timestamp-prefixed format |
+| `migrator.ErrDuplicateMigration` | A migration with the same name is already registered |
+
+```go
+if err := m.Register("bad-name", &migrations.CreateUsersTable{}); err != nil {
+    if errors.Is(err, migrator.ErrInvalidMigrationName) {
+        // handle invalid name
+    }
+}
+```
+
+`AutoRegister()` panics on these same conditions instead of returning an error, because it runs inside `init()`.
 
 ## What's Next?
 

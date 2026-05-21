@@ -1,11 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "mcp__pencil__get_screenshot",
-      "mcp__pencil__batch_get",
-      "Bash(npx tsc *)",
-      "Bash(./node_modules/.bin/next build *)",
-      "Bash(npm run *)"
+      "Bash(grep -rn \"func New\" \"C:/Users/andrian.prasetya/Documents/go-migration/pkg/migrator/\" | grep -i \"migrator\\\\|WithGrammar\\\\|Option\" ; echo \"---WithGrammar---\" ; grep -rn \"WithGrammar\\\\|func New\\(\" \"C:/Users/andrian.prasetya/Documents/go-migration/pkg/migrator/\")"
     ]
   }
 }

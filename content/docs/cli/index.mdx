@@ -21,11 +21,21 @@ Install the CLI tool:
 go install github.com/gopackx/go-migration/cmd/migrator@latest
 ```
 
+`go install` names the binary after the last path element, so this installs a binary called `migrator` into your `$GOBIN`. The CLI's own help and usage text refers to itself as `go-migration`, so if you prefer that name, build it explicitly with `-o`:
+
+```bash
+go build -o go-migration github.com/gopackx/go-migration/cmd/migrator
+```
+
 Verify the installation:
 
 ```bash
 go-migration --help
 ```
+
+<Callout type="info">
+  If you installed via `go install`, the binary is named `migrator`. Either run the commands on this page as `migrator <command>` or rename/build it to `go-migration` as shown above. The examples below use `go-migration`.
+</Callout>
 
 ## Command Reference
 
@@ -48,7 +58,7 @@ go-migration --help
 
 ### Smart Command Classification
 
-Commands like `version`, `help`, `init`, and all `make:*` commands skip database setup entirely. This means they work even without a valid database connection or config file — useful when scaffolding files on a fresh project.
+Commands like `help`, `init`, and all `make:*` commands skip database setup entirely. This means they work even without a valid database connection or config file — useful when scaffolding files on a fresh project.
 
 ## Global Flags
 
@@ -63,11 +73,11 @@ go-migration migrate --config=./config/migration.json
 | `--config` | `string` | `migration.json` | Path to the configuration file |
 
 <Callout type="info">
-  Jika Anda masih menggunakan file konfigurasi YAML (`go-migration.yaml`), Anda dapat menentukannya secara eksplisit melalui flag `--config`:
+  If you are still using a YAML configuration file, you can point to it explicitly via the `--config` flag:
   ```bash
-  go-migration migrate --config=go-migration.yaml
+  go-migration migrate --config=migration.yaml
   ```
-  Perhatikan bahwa file YAML masih didukung tetapi deprecated sejak v1.0.0 — go-migration akan menampilkan peringatan deprecation di console.
+  Note that YAML files are still supported but deprecated — go-migration prints a deprecation warning to stderr when it loads a `.yaml`/`.yml` config. Migrate to JSON (`migration.json`) instead.
 </Callout>
 
 ---
@@ -164,7 +174,7 @@ go-migration init --force
 Run all pending migrations that have not yet been applied to the database.
 
 ```bash
-go-migration migrate [--seed]
+go-migration migrate [--dry-run]
 ```
 
 Migrations are executed in the order they were registered. Each run is assigned a **batch number** so you can roll back a group of migrations together.
@@ -173,11 +183,7 @@ Migrations are executed in the order they were registered. Each run is assigned 
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--seed` | `bool` | `false` | Run all registered seeders after migrations complete |
-
-<Callout type="info">
-  The `--seed` flag is new in v1.0.0. It allows you to run all registered seeders immediately after migrations complete, combining two steps into one.
-</Callout>
+| `--dry-run` | `bool` | `false` | Print the SQL that would run without executing it against the database |
 
 ### Examples
 
@@ -185,11 +191,11 @@ Migrations are executed in the order they were registered. Each run is assigned 
 # Run all pending migrations
 go-migration migrate
 
-# Run migrations then seed the database
-go-migration migrate --seed
+# Preview the SQL without applying it
+go-migration migrate --dry-run
 
 # Run with a specific config file
-go-migration migrate --config=./config/production.yaml
+go-migration migrate --config=./config/production.json
 ```
 
 <Callout type="info">
@@ -203,7 +209,7 @@ go-migration migrate --config=./config/production.yaml
 Roll back the most recent batch of migrations. Use the `--step` flag to roll back a specific number of migrations.
 
 ```bash
-go-migration migrate:rollback [--step=N]
+go-migration migrate:rollback [--step=N] [--dry-run]
 ```
 
 ### Flags
@@ -211,6 +217,7 @@ go-migration migrate:rollback [--step=N]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--step` | `int` | `0` | Number of migrations to roll back. `0` rolls back the entire last batch. |
+| `--dry-run` | `bool` | `false` | Print the SQL that would run without executing it against the database |
 
 ### Examples
 
@@ -233,7 +240,7 @@ go-migration migrate:rollback --step=3
 Roll back **all** migrations in reverse order, returning the database to a clean state.
 
 ```bash
-go-migration migrate:reset [--force]
+go-migration migrate:reset [--force] [--dry-run]
 ```
 
 This calls the `Down` method on every applied migration, starting from the most recently applied.
@@ -242,15 +249,12 @@ This calls the `Down` method on every applied migration, starting from the most 
   `migrate:reset` prompts for confirmation before proceeding. Pass `--force` to skip the confirmation prompt (useful for CI/CD pipelines).
 </Callout>
 
-<Callout type="info">
-  The `--force` flag on `migrate:reset` is new in v1.0.0.
-</Callout>
-
 ### Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--force` | `bool` | `false` | Skip the confirmation prompt |
+| `--dry-run` | `bool` | `false` | Print the SQL that would run without executing it against the database |
 
 ### Examples
 
@@ -262,7 +266,7 @@ go-migration migrate:reset
 go-migration migrate:reset --force
 
 # Roll back all migrations with a specific config
-go-migration migrate:reset --config=./config/staging.yaml
+go-migration migrate:reset --config=./config/staging.json
 ```
 
 ---
@@ -272,7 +276,7 @@ go-migration migrate:reset --config=./config/staging.yaml
 Roll back all migrations and then re-run them. This is equivalent to running `migrate:reset` followed by `migrate`.
 
 ```bash
-go-migration migrate:refresh [--seed]
+go-migration migrate:refresh [--dry-run]
 ```
 
 Useful during development when you want to rebuild the entire database schema from scratch while keeping your migration files intact.
@@ -281,11 +285,7 @@ Useful during development when you want to rebuild the entire database schema fr
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--seed` | `bool` | `false` | Run all registered seeders after migrations complete |
-
-<Callout type="info">
-  The `--seed` flag on `migrate:refresh` is new in v1.0.0.
-</Callout>
+| `--dry-run` | `bool` | `false` | Print the SQL that would run without executing it against the database |
 
 ### Examples
 
@@ -293,11 +293,11 @@ Useful during development when you want to rebuild the entire database schema fr
 # Refresh all migrations
 go-migration migrate:refresh
 
-# Refresh and seed
-go-migration migrate:refresh --seed
+# Preview the SQL without applying it
+go-migration migrate:refresh --dry-run
 
 # Refresh with a specific config
-go-migration migrate:refresh --config=./config/development.yaml
+go-migration migrate:refresh --config=./config/development.json
 ```
 
 ---
@@ -307,7 +307,7 @@ go-migration migrate:refresh --config=./config/development.yaml
 Drop **all tables** from the database, then run all migrations from the beginning.
 
 ```bash
-go-migration migrate:fresh [--force] [--seed]
+go-migration migrate:fresh [--force] [--dry-run]
 ```
 
 Unlike `migrate:refresh`, this command does not call `Down` methods. It drops every table directly, then runs all `Up` methods.
@@ -321,7 +321,7 @@ Unlike `migrate:refresh`, this command does not call `Down` methods. It drops ev
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--force` | `bool` | `false` | Skip the confirmation prompt |
-| `--seed` | `bool` | `false` | Run all registered seeders after migrations complete |
+| `--dry-run` | `bool` | `false` | Print the SQL that would run without executing it against the database |
 
 ### Examples
 
@@ -332,11 +332,11 @@ go-migration migrate:fresh
 # Drop all tables without confirmation
 go-migration migrate:fresh --force
 
-# Fresh migration then seed
-go-migration migrate:fresh --seed
+# Preview the SQL without applying it
+go-migration migrate:fresh --dry-run
 
 # Fresh migration with a specific config
-go-migration migrate:fresh --config=./config/test.yaml
+go-migration migrate:fresh --config=./config/test.json
 ```
 
 <Callout type="error">
@@ -355,15 +355,14 @@ go-migration migrate:status
 
 ### Example Output
 
-```
-+------+----------------------------------------+-------+
-| Ran? | Migration                              | Batch |
-+------+----------------------------------------+-------+
-| Yes  | 20240101_000001_create_users_table      | 1     |
-| Yes  | 20240115_000001_create_posts_table      | 1     |
-| Yes  | 20240201_000001_add_phone_to_users      | 2     |
-| No   | 20240301_000001_create_comments_table   |       |
-+------+----------------------------------------+-------+
+The output is a simple tab-aligned table with `Migration`, `Status`, `Batch`, and `Applied At` columns. Applied migrations show `Applied` along with their batch number and timestamp; pending ones show `Pending` with the remaining columns blank.
+
+```text
+Migration                                Status    Batch   Applied At
+20240101_000001_create_users_table       Applied   1       2024-01-01 09:30:00
+20240115_000001_create_posts_table       Applied   1       2024-01-01 09:30:01
+20240201_000001_add_phone_to_users       Applied   2       2024-02-01 14:12:45
+20240301_000001_create_comments_table    Pending
 ```
 
 ### Examples
@@ -373,7 +372,7 @@ go-migration migrate:status
 go-migration migrate:status
 
 # Show status using a specific config
-go-migration migrate:status --config=./config/production.yaml
+go-migration migrate:status --config=./config/production.json
 ```
 
 ---
@@ -438,21 +437,28 @@ When using `--create=users`, the generated file includes `s.Create()` scaffoldin
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
+// CreateUsersTable migration.
 type CreateUsersTable struct{}
 
-func (m *CreateUsersTable) Up(s *schema.Builder) {
-    s.Create("users", func(bp *schema.Blueprint) {
+func init() {
+    migrator.AutoRegister("20240101_000001_create_users_table", &CreateUsersTable{})
+}
+
+// Up runs the migration.
+func (m *CreateUsersTable) Up(s *schema.Builder) error {
+    return s.Create("users", func(bp *schema.Blueprint) {
         bp.ID()
-        // Add columns here
         bp.Timestamps()
     })
 }
 
-func (m *CreateUsersTable) Down(s *schema.Builder) {
-    s.DropIfExists("users")
+// Down reverses the migration.
+func (m *CreateUsersTable) Down(s *schema.Builder) error {
+    return s.Drop("users")
 }
 ```
 
@@ -464,20 +470,28 @@ When using `--table=users`, the generated file includes `s.Alter()` scaffolding:
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
+// AddEmailToUsers migration.
 type AddEmailToUsers struct{}
 
-func (m *AddEmailToUsers) Up(s *schema.Builder) {
-    s.Alter("users", func(bp *schema.Blueprint) {
-        // Add or modify columns here
+func init() {
+    migrator.AutoRegister("20240201_000001_add_email_to_users", &AddEmailToUsers{})
+}
+
+// Up runs the migration.
+func (m *AddEmailToUsers) Up(s *schema.Builder) error {
+    return s.Alter("users", func(bp *schema.Blueprint) {
+        // TODO: define table alterations
     })
 }
 
-func (m *AddEmailToUsers) Down(s *schema.Builder) {
-    s.Alter("users", func(bp *schema.Blueprint) {
-        // Reverse the changes here
+// Down reverses the migration.
+func (m *AddEmailToUsers) Down(s *schema.Builder) error {
+    return s.Alter("users", func(bp *schema.Blueprint) {
+        // TODO: reverse table alterations
     })
 }
 ```
@@ -486,17 +500,13 @@ func (m *AddEmailToUsers) Down(s *schema.Builder) {
 
 ## make:seeder
 
-Generate a new seeder file with boilerplate code.
+Generate a new seeder file with boilerplate code. The seeder name is passed as a positional argument; the struct name is derived from it.
 
 ```bash
-go-migration make:seeder <name> [--class=CLASS]
+go-migration make:seeder <name>
 ```
 
-### Flags
-
-| Flag | Type | Description |
-|------|------|-------------|
-| `--class` | `string` | The struct name for the seeder (defaults to the provided name in PascalCase) |
+This command takes no flags beyond the global `--config`.
 
 ### Examples
 
@@ -504,8 +514,8 @@ go-migration make:seeder <name> [--class=CLASS]
 # Generate a seeder file
 go-migration make:seeder users
 
-# Generate with a custom struct name
-go-migration make:seeder users --class=UserSeeder
+# Generate a seeder for a specific model
+go-migration make:seeder user_profile
 ```
 
 ### Generated File
@@ -551,7 +561,7 @@ go-migration make:factory user_profile
 package factories
 
 import (
-    "github.com/gopackx/go-migration/seeder/factory"
+    "github.com/gopackx/go-migration/pkg/seeder/factory"
 )
 
 // Users model.
@@ -603,7 +613,7 @@ go-migration db:seed --class=UserSeeder
 go-migration db:seed --tag=development
 
 # Run with a specific config
-go-migration db:seed --config=./config/development.yaml
+go-migration db:seed --config=./config/development.json
 ```
 
 <Callout type="info">
@@ -637,7 +647,7 @@ go-migration db:seed:rollback --class=CLASS
 go-migration db:seed:rollback --class=UserSeeder
 
 # Roll back with a specific config
-go-migration db:seed:rollback --class=UserSeeder --config=./config/development.yaml
+go-migration db:seed:rollback --class=UserSeeder --config=./config/development.json
 ```
 
 <Callout type="warn">
@@ -671,7 +681,7 @@ go-migration db:seed:truncate --table=TABLE
 go-migration db:seed:truncate --table=users
 
 # Truncate with a specific config
-go-migration db:seed:truncate --table=posts --config=./config/development.yaml
+go-migration db:seed:truncate --table=posts --config=./config/development.json
 ```
 
 <Callout type="warn">
@@ -685,18 +695,20 @@ go-migration db:seed:truncate --table=posts --config=./config/development.yaml
 | Flag | Commands | Type | Description |
 |------|----------|------|-------------|
 | `--step` | `migrate:rollback` | `int` | Number of migrations to roll back |
+| `--dry-run` | `migrate`, `migrate:rollback`, `migrate:reset`, `migrate:refresh`, `migrate:fresh` | `bool` | Print the SQL without executing it |
 | `--module` | `init` | `string` | Override the Go module path used in generated imports |
 | `--force` | `init`, `migrate:fresh`, `migrate:reset` | `bool` | Overwrite existing files (`init`) or skip confirmation prompt (`migrate:fresh`, `migrate:reset`) |
-| `--seed` | `migrate`, `migrate:fresh`, `migrate:refresh` | `bool` | Run seeders after migrations complete |
 | `--create` | `make:migration` | `string` | Table name for a create-table migration |
-| `--table` | `make:migration`, `db:seed:truncate` | `string` | Table name for migration modification or truncation |
-| `--class` | `make:seeder`, `db:seed`, `db:seed:rollback` | `string` | Seeder struct name |
+| `--table` | `make:migration` | `string` | Table name for a table-modification migration |
+| `--table` | `db:seed:truncate` | `string` | Table name to truncate (required) |
+| `--class` | `db:seed` | `string` | Run only the specified seeder by name |
+| `--class` | `db:seed:rollback` | `string` | Seeder name to roll back (required) |
 | `--tag` | `db:seed` | `string` | Run seeders matching the given tag |
-| (positional) | `make:factory` | `string` | Factory name (required) |
+| (positional) | `make:seeder`, `make:factory` | `string` | Seeder/factory name (required) |
 | `--config` | All commands | `string` | Path to the configuration file |
 
 ## What's Next?
 
-- [Configuration](/docs/configuration) — set up database connections with YAML, JSON, or environment variables
+- [Configuration](/docs/configuration) — set up database connections with JSON (or deprecated YAML) and environment variables
 - [Getting Started](/docs/getting-started) — install go-migration and run your first migration
 - [Migrations](/docs/migrations/defining-migrations) — learn how to define and manage migrations

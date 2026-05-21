@@ -9,7 +9,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 The Migrator is the central component of go-migration. It manages migration registration, execution, rollback, and status tracking.
 
-**Import path:** `github.com/gopackx/go-migration/migrator`
+**Import path:** `github.com/gopackx/go-migration/pkg/migrator`
 
 For conceptual documentation, see [Migrations](/docs/migrations/defining-migrations).
 
@@ -29,7 +29,7 @@ This function does not return — it calls `os.Exit()` on completion or error.
 package main
 
 import (
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     _ "your-project/database/migrations"
     _ "your-project/database/seeders"
 )
@@ -41,7 +41,7 @@ func main() {
 
 `Run()` performs the following steps:
 1. Parses CLI arguments to determine the command
-2. For commands that need a database (smart classification skips DB for `version`, `help`, `make:*`):
+2. For commands that need a database (smart classification skips DB for `help`, `init`, `make:*`):
    - Loads `migration.json` (or `--config` path) with `${ENV}` variable interpolation. Falls back to `go-migration.yaml` for backward compatibility.
    - Opens a database connection using the config
    - Auto-discovers all registered migrations and seeders
@@ -51,7 +51,7 @@ func main() {
 See [Quick Start](/docs/getting-started/quick-start) for a complete example.
 
 <Callout type="info">
-  New in v1.0.0: `Run()` now supports the `--seed` flag on `migrate` and `migrate:refresh`, the `--tag` flag on `db:seed`, the `--force` flag on `migrate:reset`, and the new `db:seed:rollback` and `db:seed:truncate` commands. See [CLI Reference](/docs/cli) for details.
+  New in v1.0.0: `Run()` now supports the `--dry-run` flag on the migrate commands, the `--tag` flag on `db:seed`, the `--force` flag on `migrate:reset`, and the new `db:seed:rollback` and `db:seed:truncate` commands. See [CLI Reference](/docs/cli) for details.
 </Callout>
 
 <Callout type="info">
@@ -78,15 +78,55 @@ func New(db *sql.DB, opts ...Option) *Migrator
 ```go
 import (
     "database/sql"
-    "github.com/gopackx/go-migration/migrator"
-    "github.com/gopackx/go-migration/grammar"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema/grammars"
 )
 
-// Default (PostgreSQL grammar)
+// Default (no grammar configured; required for Fresh())
 m := migrator.New(db)
 
 // With a specific grammar
-m := migrator.New(db, migrator.WithGrammar(grammar.MySQL()))
+m := migrator.New(db, migrator.WithGrammar(&grammars.MySQLGrammar{}))
+```
+
+**Available options:**
+
+| Option | Signature | Description |
+|--------|-----------|-------------|
+| `WithGrammar` | `WithGrammar(g schema.Grammar) Option` | Sets the SQL grammar (required for `Fresh()`) |
+| `WithTableName` | `WithTableName(name string) Option` | Sets the tracking table name (default: `"migrations"`) |
+| `WithLogger` | `WithLogger(l Logger) Option` | Sets the logger used by the migrator and runner |
+| `WithAutoDiscover` | `WithAutoDiscover() Option` | Loads auto-registered migrations during construction |
+| `WithProgress` | `WithProgress(fn ProgressFunc) Option` | Registers a per-migration progress callback |
+| `WithDryRun` | `WithDryRun(w io.Writer) Option` | Enables dry-run mode, writing SQL to `w` instead of executing |
+
+`WithGrammar` accepts any value implementing `schema.Grammar`. The grammars package
+provides `&grammars.MySQLGrammar{}`, `&grammars.PostgresGrammar{}`, and
+`&grammars.SQLiteGrammar{}` (or the matching `grammars.NewMySQLGrammar()`,
+`grammars.NewPostgresGrammar()`, and `grammars.NewSQLiteGrammar()` constructors).
+
+The `Logger` interface required by `WithLogger` is:
+
+```go
+type Logger interface {
+    Info(msg string, args ...any)
+    Error(msg string, args ...any)
+}
+```
+
+```go
+// Custom table name and logger
+m := migrator.New(db,
+    migrator.WithGrammar(&grammars.PostgresGrammar{}),
+    migrator.WithTableName("schema_migrations"),
+    migrator.WithLogger(myLogger),
+)
+
+// Dry-run: print SQL to stdout instead of executing
+m := migrator.New(db,
+    migrator.WithGrammar(&grammars.PostgresGrammar{}),
+    migrator.WithDryRun(os.Stdout),
+)
 ```
 
 See [Database Grammars](/docs/database-grammars) for grammar selection details.
@@ -111,7 +151,7 @@ func AutoRegister(name string, m Migration)
 ```go title="migrations/20240101000001_create_users.go"
 package migrations
 
-import "github.com/gopackx/go-migration/migrator"
+import "github.com/gopackx/go-migration/pkg/migrator"
 
 func init() {
     migrator.AutoRegister("20240101000001_create_users", &CreateUsersTable{})
@@ -187,7 +227,7 @@ func WithProgress(fn ProgressFunc) Option
 | Field | Type | Description |
 |-------|------|-------------|
 | `Name` | `string` | The migration name being executed |
-| `Index` | `int` | The 1-based index of the current migration |
+| `Index` | `int` | The 0-based index of the current migration |
 | `Total` | `int` | The total number of migrations to execute |
 | `Duration` | `time.Duration` | How long this migration took to execute |
 | `Direction` | `string` | Either `"up"` or `"down"` |
@@ -196,7 +236,8 @@ The callback is invoked after each migration completes, giving you real-time vis
 
 ```go
 m := migrator.New(db, migrator.WithProgress(func(e migrator.ProgressEvent) {
-    fmt.Printf("[%d/%d] %s %s (%s)\n", e.Index, e.Total, e.Direction, e.Name, e.Duration)
+    // Index is 0-based; add 1 for human-friendly "N of Total" display.
+    fmt.Printf("[%d/%d] %s %s (%s)\n", e.Index+1, e.Total, e.Direction, e.Name, e.Duration)
 }))
 ```
 
@@ -209,21 +250,29 @@ See [Progress Reporting](/docs/migrations/running-migrations#progress-reporting)
 Registers a migration struct with the migrator under a unique name.
 
 ```go
-func (m *Migrator) Register(name string, migration Migration)
+func (m *Migrator) Register(name string, migration Migration) error
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `name` | `string` | Unique migration name (use timestamp prefix for ordering) |
+| `name` | `string` | Unique migration name (must match the timestamp-prefixed format) |
 | `migration` | `Migration` | Pointer to a struct implementing the `Migration` interface |
 
+**Returns:** `error` — `nil` on success, or an error wrapping `ErrInvalidMigrationName` (bad name format) or `ErrDuplicateMigration` (name already registered).
+
 ```go
-m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+if err := m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{}); err != nil {
+    log.Fatal(err)
+}
+if err := m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{}); err != nil {
+    log.Fatal(err)
+}
 ```
 
 <Callout type="info">
-  Migration names are sorted alphabetically to determine execution order. Use `YYYYMMDD_description` naming for chronological ordering.
+  Migration names are sorted to determine execution order. Use a 14-digit
+  `YYYYMMDDHHMMSS_description` prefix (or the `YYYY_MM_DD_HHMMSS_RRRR_description`
+  form) for chronological ordering. The description must be lowercase.
 </Callout>
 
 See [Registering Migrations](/docs/migrations/registering-migrations) for naming conventions and auto-discovery.
@@ -390,8 +439,9 @@ Each `MigrationStatus` contains:
 | Field | Type | Description |
 |-------|------|-------------|
 | `Name` | `string` | The migration name |
-| `Ran` | `bool` | Whether the migration has been executed |
-| `Batch` | `int` | The batch number (`0` if not yet run) |
+| `Applied` | `bool` | Whether the migration has been applied |
+| `Batch` | `int` | The batch number (`0` if not yet applied) |
+| `AppliedAt` | `*time.Time` | When the migration was applied (`nil` if not yet applied) |
 
 ```go
 statuses, err := m.Status()
@@ -400,7 +450,7 @@ if err != nil {
 }
 
 for _, s := range statuses {
-    fmt.Printf("%s — Ran: %v, Batch: %d\n", s.Name, s.Ran, s.Batch)
+    fmt.Printf("%s — Applied: %v, Batch: %d\n", s.Name, s.Applied, s.Batch)
 }
 ```
 
@@ -408,41 +458,23 @@ See [Migration Status](/docs/migrations/migration-status).
 
 ---
 
-## `m.Install()`
-
-Manually creates the migrations tracking table. This is normally done automatically on the first `Up()` call.
-
-```go
-func (m *Migrator) Install() error
-```
-
-**Returns:** `error`
-
-```go
-if err := m.Install(); err != nil {
-    log.Fatal(err)
-}
-```
-
----
-
 ## `m.BeforeMigrate()`
 
-Registers a hook that runs before any migration is executed.
+Registers a hook that runs before *each* migration is executed. The hook fires once per migration, receiving that migration's name and direction.
 
 ```go
-func (m *Migrator) BeforeMigrate(fn func() error)
+func (m *Migrator) BeforeMigrate(fn func(name string, direction string) error)
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `fn` | `func() error` | Callback executed before migrations run |
+| `fn` | `func(name string, direction string) error` | Callback executed before each migration. `direction` is `"up"` or `"down"`. |
 
-If the callback returns an error, the migration is aborted and no changes are applied.
+If the callback returns an error, that migration is aborted and no further migrations run.
 
 ```go
-m.BeforeMigrate(func() error {
-    log.Println("Starting migration...")
+m.BeforeMigrate(func(name, direction string) error {
+    log.Printf("Starting %s %s...", direction, name)
     return nil
 })
 ```
@@ -453,21 +485,21 @@ See [Hooks](/docs/hooks) for use cases and error behavior.
 
 ## `m.AfterMigrate()`
 
-Registers a hook that runs after all migrations complete successfully.
+Registers a hook that runs after *each* migration completes. The hook fires once per migration, receiving its name, direction, and execution duration.
 
 ```go
-func (m *Migrator) AfterMigrate(fn func() error)
+func (m *Migrator) AfterMigrate(fn func(name string, direction string, duration time.Duration) error)
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `fn` | `func() error` | Callback executed after migrations complete |
+| `fn` | `func(name string, direction string, duration time.Duration) error` | Callback executed after each migration. `direction` is `"up"` or `"down"`. |
 
-If the callback returns an error, the error is logged but migrations are not rolled back.
+If the callback returns an error, the error is ignored and execution continues.
 
 ```go
-m.AfterMigrate(func() error {
-    log.Println("Migrations completed!")
+m.AfterMigrate(func(name, direction string, duration time.Duration) error {
+    log.Printf("Finished %s %s in %s", direction, name, duration)
     return nil
 })
 ```
@@ -482,21 +514,21 @@ Structs registered with the migrator must implement this interface:
 
 ```go
 type Migration interface {
-    Up(s *schema.Builder)
-    Down(s *schema.Builder)
+    Up(s *schema.Builder) error
+    Down(s *schema.Builder) error
 }
 ```
 
 | Method | Description |
 |--------|-------------|
-| `Up(*schema.Builder)` | Defines the forward migration |
-| `Down(*schema.Builder)` | Defines the reverse migration |
+| `Up(*schema.Builder) error` | Defines the forward migration |
+| `Down(*schema.Builder) error` | Defines the reverse migration |
 
-Optionally implement `DisableTransaction()` to opt out of per-migration transaction wrapping:
+Optionally implement `TransactionOption` to opt out of per-migration transaction wrapping. Return `true` to disable the surrounding transaction:
 
 ```go
-type TransactionDisabler interface {
-    DisableTransaction()
+type TransactionOption interface {
+    DisableTransaction() bool
 }
 ```
 
@@ -584,7 +616,7 @@ See [Seeder Rollback](/docs/seeders/rollback) for details.
 | `AutoRegister` | `AutoRegister(name, migration)` | Register a migration via `init()` |
 | `WithAutoDiscover` | `WithAutoDiscover() Option` | Option to load auto-registered migrations |
 | `WithProgress` | `WithProgress(fn) Option` | Option to receive per-migration progress events |
-| `Register` | `Register(name, migration)` | Register a migration manually |
+| `Register` | `Register(name, migration) error` | Register a migration manually |
 | `AutoDiscover` | `AutoDiscover() error` | Load auto-registered migrations |
 | `Up` | `Up() error` | Run pending migrations |
 | `Rollback` | `Rollback(steps) error` | Roll back migrations |
@@ -592,8 +624,7 @@ See [Seeder Rollback](/docs/seeders/rollback) for details.
 | `Refresh` | `Refresh() error` | Reset + Up |
 | `Fresh` | `Fresh() error` | Drop all tables + Up |
 | `Status` | `Status() ([]MigrationStatus, error)` | Get migration states |
-| `Install` | `Install() error` | Create tracking table |
-| `BeforeMigrate` | `BeforeMigrate(fn)` | Register pre-migration hook |
-| `AfterMigrate` | `AfterMigrate(fn)` | Register post-migration hook |
+| `BeforeMigrate` | `BeforeMigrate(fn)` | Register per-migration pre-hook |
+| `AfterMigrate` | `AfterMigrate(fn)` | Register per-migration post-hook |
 | `TaggedSeeder` | `Tags() []string` | Interface for tag-based seeder filtering *(v1.0.0)* |
 | `RollbackableSeeder` | `Rollback(db) error` | Interface for seeder rollback support *(v1.0.0)* |

@@ -42,7 +42,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
 )
 
 func main() {
@@ -62,7 +62,7 @@ func main() {
 </Tab>
 <Tab value="MySQL">
 
-Use `grammar.MySQL()` to generate MySQL-compatible SQL.
+Use the `MySQLGrammar` to generate MySQL-compatible SQL.
 
 ```go title="main.go"
 package main
@@ -73,8 +73,8 @@ import (
 
     _ "github.com/go-sql-driver/mysql"
 
-    "github.com/gopackx/go-migration/grammar"
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema/grammars"
 )
 
 func main() {
@@ -84,7 +84,7 @@ func main() {
     }
     defer db.Close()
 
-    m := migrator.New(db, migrator.WithGrammar(grammar.MySQL()))
+    m := migrator.New(db, migrator.WithGrammar(&grammars.MySQLGrammar{}))
 
     // Register migrations and run...
 }
@@ -93,7 +93,7 @@ func main() {
 </Tab>
 <Tab value="SQLite">
 
-Use `grammar.SQLite()` to generate SQLite-compatible SQL.
+Use the `SQLiteGrammar` to generate SQLite-compatible SQL.
 
 ```go title="main.go"
 package main
@@ -104,8 +104,8 @@ import (
 
     _ "github.com/mattn/go-sqlite3"
 
-    "github.com/gopackx/go-migration/grammar"
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema/grammars"
 )
 
 func main() {
@@ -115,7 +115,7 @@ func main() {
     }
     defer db.Close()
 
-    m := migrator.New(db, migrator.WithGrammar(grammar.SQLite()))
+    m := migrator.New(db, migrator.WithGrammar(&grammars.SQLiteGrammar{}))
 
     // Register migrations and run...
 }
@@ -134,22 +134,22 @@ The table below shows how each go-migration column type maps to native SQL types
 
 | go-migration Method | PostgreSQL | MySQL | SQLite |
 |---------------------|-----------|-------|--------|
-| `bp.ID(name)` | `BIGSERIAL PRIMARY KEY` | `BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
-| `bp.String(name, n)` | `VARCHAR(n)` | `VARCHAR(n)` | `VARCHAR(n)` |
+| `bp.ID()` | `BIGSERIAL PRIMARY KEY` | `BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
+| `bp.String(name, n)` | `VARCHAR(n)` | `VARCHAR(n)` | `TEXT` |
 | `bp.Text(name)` | `TEXT` | `TEXT` | `TEXT` |
 | `bp.Integer(name)` | `INTEGER` | `INT` | `INTEGER` |
 | `bp.BigInteger(name)` | `BIGINT` | `BIGINT` | `INTEGER` |
 | `bp.Boolean(name)` | `BOOLEAN` | `TINYINT(1)` | `INTEGER` |
-| `bp.Timestamp(name)` | `TIMESTAMP` | `TIMESTAMP` | `DATETIME` |
-| `bp.Date(name)` | `DATE` | `DATE` | `DATE` |
-| `bp.Decimal(name, p, s)` | `DECIMAL(p,s)` | `DECIMAL(p,s)` | `DECIMAL(p,s)` |
+| `bp.Timestamp(name)` | `TIMESTAMPTZ` | `TIMESTAMP` | `TEXT` |
+| `bp.Date(name)` | `DATE` | `DATE` | `TEXT` |
+| `bp.Decimal(name, p, s)` | `DECIMAL(p,s)` | `DECIMAL(p,s)` | `REAL` |
 | `bp.Float(name)` | `DOUBLE PRECISION` | `DOUBLE` | `REAL` |
-| `bp.UUID(name)` | `UUID` | `CHAR(36)` | `VARCHAR(36)` |
+| `bp.UUID(name)` | `UUID` | `CHAR(36)` | `TEXT` |
 | `bp.JSON(name)` | `JSONB` | `JSON` | `TEXT` |
 | `bp.Binary(name)` | `BYTEA` | `BLOB` | `BLOB` |
 
 <Callout type="warn">
-  SQLite has a limited type system. Types like `BOOLEAN` and `BigInteger` map to `INTEGER`, and `JSON` is stored as `TEXT`. Your application code should handle any necessary type conversions.
+  SQLite has a limited type system. Most types collapse to its core affinities: strings, dates, timestamps, UUIDs, and JSON are all stored as `TEXT`, `BigInteger` and `Boolean` map to `INTEGER`, and `Decimal`/`Float` map to `REAL`. The `String` length argument is ignored. Your application code should handle any necessary type conversions.
 </Callout>
 
 ## Key Differences Between Grammars
@@ -160,6 +160,7 @@ The table below shows how each go-migration column type maps to native SQL types
 - Has native `UUID` and `JSONB` types
 - Uses `BYTEA` for binary data
 - `BOOLEAN` is a true boolean type
+- Timestamps use `TIMESTAMPTZ` (timestamp with time zone)
 
 ### MySQL
 
@@ -172,7 +173,8 @@ The table below shows how each go-migration column type maps to native SQL types
 
 - Uses `INTEGER PRIMARY KEY AUTOINCREMENT` for IDs
 - Most types map to SQLite's core affinities (`INTEGER`, `TEXT`, `REAL`, `BLOB`)
-- No native UUID or JSON types — stored as text
+- Strings, dates, and timestamps are all stored as `TEXT` (the `String` length is ignored)
+- No native UUID or JSON types — stored as `TEXT`
 - No native boolean — stored as integer (0 or 1)
 
 ## What's Next?

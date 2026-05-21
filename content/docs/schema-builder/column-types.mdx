@@ -13,7 +13,7 @@ The Schema Builder provides methods on the `*schema.Blueprint` for every support
 
 | Method | Description | Parameters |
 |--------|-------------|------------|
-| `bp.ID(name)` | Auto-incrementing unsigned big integer primary key | `name string` |
+| `bp.ID()` | Auto-incrementing unsigned big integer primary key named `id` | _none_ |
 | `bp.String(name, length)` | Variable-length string (VARCHAR) | `name string, length int` |
 | `bp.Text(name)` | Unlimited-length text | `name string` |
 | `bp.Integer(name)` | 32-bit integer | `name string` |
@@ -32,16 +32,18 @@ The Schema Builder provides methods on the `*schema.Blueprint` for every support
 | `bp.MediumText(name)` | Medium text (MySQL: MEDIUMTEXT, others: TEXT) | `name string` |
 | `bp.TinyInt(name)` | Tiny integer (MySQL: TINYINT, PG: SMALLINT, SQLite: INTEGER) | `name string` |
 | `bp.SmallInt(name)` | Small integer (MySQL/PG: SMALLINT, SQLite: INTEGER) | `name string` |
+| `bp.Timestamps()` | Adds nullable `created_at` and `updated_at` columns | _none_ |
+| `bp.SoftDeletes()` | Adds a nullable `deleted_at` column | _none_ |
 
 ## Usage Examples
 
 ### Primary Key
 
 ```go
-bp.ID("id")
+bp.ID()
 ```
 
-`ID` creates an auto-incrementing unsigned big integer column and sets it as the primary key. This is the recommended way to define primary keys.
+`ID` creates an auto-incrementing unsigned big integer column named `id` and sets it as the primary key. It takes no arguments. This is the recommended way to define primary keys.
 
 ### Strings
 
@@ -86,6 +88,18 @@ bp.Boolean("verified").Default(false)
 bp.Timestamp("created_at").Nullable()
 bp.Timestamp("updated_at").Nullable()
 bp.Date("date_of_birth").Nullable()
+```
+
+### Timestamps and Soft Deletes
+
+`Timestamps` and `SoftDeletes` are convenience helpers that add common columns. Unlike the other column methods, they return nothing — they add columns directly to the Blueprint:
+
+```go
+// Adds nullable created_at and updated_at columns
+bp.Timestamps()
+
+// Adds a nullable deleted_at column for soft-delete patterns
+bp.SoftDeletes()
 ```
 
 ### UUID
@@ -165,7 +179,7 @@ Use these for columns that store small numeric ranges to save storage space:
 
 ```go
 s.Create("products", func(bp *schema.Blueprint) {
-    bp.ID("id")
+    bp.ID()
     bp.UUID("sku").Unique()
     bp.String("name", 255)
     bp.Text("description").Nullable()

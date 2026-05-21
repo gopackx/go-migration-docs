@@ -35,51 +35,51 @@ if err := m.Up(); err != nil {
 
 ## Disabling Transactions
 
-Some database operations cannot run inside a transaction (for example, `CREATE INDEX CONCURRENTLY` in PostgreSQL). For these cases, implement the `DisableTransaction()` method on your migration struct:
+Some database operations cannot run inside a transaction (for example, `CREATE INDEX CONCURRENTLY` in PostgreSQL). For these cases, implement the `DisableTransaction() bool` method on your migration struct and return `true`:
 
-```go title="migrations/20240301_add_index_concurrently.go"
+```go title="migrations/20240301000001_add_index_concurrently.go"
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 type AddIndexConcurrently struct{}
 
-func (m *AddIndexConcurrently) Up(s *schema.Builder) {
+func (m *AddIndexConcurrently) Up(s *schema.Builder) error {
     // This runs outside a transaction
-    s.Alter("users", func(bp *schema.Blueprint) {
+    return s.Alter("users", func(bp *schema.Blueprint) {
         bp.Index("idx_users_email", "email")
     })
 }
 
-func (m *AddIndexConcurrently) Down(s *schema.Builder) {
-    s.Alter("users", func(bp *schema.Blueprint) {
+func (m *AddIndexConcurrently) Down(s *schema.Builder) error {
+    return s.Alter("users", func(bp *schema.Blueprint) {
         bp.DropIndex("idx_users_email")
     })
 }
 
-// DisableTransaction opts this migration out of transaction wrapping
-func (m *AddIndexConcurrently) DisableTransaction() {}
+// DisableTransaction opts this migration out of transaction wrapping.
+func (m *AddIndexConcurrently) DisableTransaction() bool { return true }
 ```
 
-When go-migration detects that a migration struct implements `DisableTransaction()`, it skips the transaction wrapper and executes the migration directly.
+When go-migration detects that a migration struct implements `DisableTransaction()` and it returns `true`, it skips the transaction wrapper and executes the migration directly.
 
 <Callout type="warn">
   Migrations that run without transactions cannot be automatically rolled back on failure. If the migration fails partway through, you may need to manually clean up. Use this only when necessary.
 </Callout>
 
-## The `DisableTransaction` Interface
+## The `TransactionOption` Interface
 
 The opt-out is detected via interface satisfaction:
 
 ```go
-type TransactionDisabler interface {
-    DisableTransaction()
+type TransactionOption interface {
+    DisableTransaction() bool
 }
 ```
 
-Any migration struct that implements this method (even with an empty body) will run outside a transaction.
+Any migration struct that implements this method and returns `true` will run outside a transaction. Returning `false` keeps the default transaction wrapping.
 
 ## When to Disable Transactions
 

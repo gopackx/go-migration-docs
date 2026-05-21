@@ -77,14 +77,28 @@ Or use `@latest` to always get the most recent version:
 go install github.com/gopackx/go-migration/cmd/migrator@latest
 ```
 
+<Callout type="info">
+  `go install` names the binary after the last path element, so this installs a binary called **`migrator`** in your `$GOBIN`. The CLI refers to itself as `go-migration` in its help and usage text, so if you prefer that name, build it explicitly:
+
+  ```bash
+  go build -o go-migration github.com/gopackx/go-migration/cmd/migrator
+  ```
+
+  The docs use `go-migration` for command examples — substitute `migrator` if you installed via `go install` and did not rename it.
+</Callout>
+
 Verify the CLI is installed:
 
 ```bash
+# If installed via go install:
+migrator --help
+
+# If you built/renamed it to go-migration:
 go-migration --help
 ```
 
 <Callout type="info">
-  Once the CLI is installed, you can optionally run `go-migration init` to scaffold your project structure — it creates the recommended directories, a starter `cmd/migrator/main.go`, and a `migration.json` config file. See the [Quick Start](/docs/getting-started/quick-start) guide or the [CLI Reference](/docs/cli) for details.
+  Once the CLI is installed, you can optionally run `go-migration init` (or `migrator init`) to scaffold your project structure — it creates the recommended directories, a starter `cmd/migrator/main.go`, and a `migration.json` config file. See the [Quick Start](/docs/getting-started/quick-start) guide or the [CLI Reference](/docs/cli) for details.
 </Callout>
 
 ## Verify Installation
@@ -97,7 +111,7 @@ package main
 import (
     "fmt"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
 )
 
 func main() {

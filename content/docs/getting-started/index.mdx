@@ -20,17 +20,17 @@ Define migrations as Go structs with `Up` and `Down` methods. Each migration is 
 ```go
 type CreateUsersTable struct{}
 
-func (m *CreateUsersTable) Up(s *schema.Builder) {
-    s.Create("users", func(bp *schema.Blueprint) {
-        bp.ID("id")
+func (m *CreateUsersTable) Up(s *schema.Builder) error {
+    return s.Create("users", func(bp *schema.Blueprint) {
+        bp.ID()
         bp.String("name", 255)
         bp.String("email", 255).Unique()
         bp.Timestamp("created_at").Nullable()
     })
 }
 
-func (m *CreateUsersTable) Down(s *schema.Builder) {
-    s.DropIfExists("users")
+func (m *CreateUsersTable) Down(s *schema.Builder) error {
+    return s.DropIfExists("users")
 }
 ```
 
@@ -58,9 +58,9 @@ go-migration depends only on `*sql.DB` from the standard library. Use it with Gi
 
 | Database   | Driver Package         | Grammar                |
 | ---------- | ---------------------- | ---------------------- |
-| PostgreSQL | `github.com/lib/pq`   | `grammar.PostgreSQL()` |
-| MySQL      | `github.com/go-sql-driver/mysql` | `grammar.MySQL()` |
-| SQLite     | `github.com/mattn/go-sqlite3`    | `grammar.SQLite()` |
+| PostgreSQL | `github.com/lib/pq`   | `&grammars.PostgresGrammar{}` |
+| MySQL      | `github.com/go-sql-driver/mysql` | `&grammars.MySQLGrammar{}` |
+| SQLite     | `github.com/mattn/go-sqlite3`    | `&grammars.SQLiteGrammar{}` |
 
 <Callout type="info">
   go-migration generates database-specific SQL through its grammar system. You write your migrations once and they work across all supported databases.

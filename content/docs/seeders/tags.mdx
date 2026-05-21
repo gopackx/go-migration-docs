@@ -63,11 +63,12 @@ This seeder runs when either the "development" or "testing" tag is requested.
 Use `runner.RunByTag()` to execute only seeders matching a specific tag:
 
 ```go
-runner := seeder.NewRunner(db)
+reg := seeder.NewRegistry()
+_ = reg.Register("DevUserSeeder", &seeders.DevUserSeeder{})
+_ = reg.Register("ProdDefaultsSeeder", &seeders.ProdDefaultsSeeder{})
+_ = reg.Register("TestFixtureSeeder", &seeders.TestFixtureSeeder{})
 
-runner.Register("DevUserSeeder", &seeders.DevUserSeeder{})
-runner.Register("ProdDefaultsSeeder", &seeders.ProdDefaultsSeeder{})
-runner.Register("TestFixtureSeeder", &seeders.TestFixtureSeeder{})
+runner := seeder.NewRunner(reg, db, nil)
 
 // Run only seeders tagged "development"
 if err := runner.RunByTag("development"); err != nil {
@@ -119,7 +120,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/seeder"
     "your-project/seeders"
 )
 
@@ -130,11 +131,12 @@ func main() {
     }
     defer db.Close()
 
-    runner := seeder.NewRunner(db)
+    reg := seeder.NewRegistry()
+    _ = reg.Register("DevUserSeeder", &seeders.DevUserSeeder{})           // tags: development, testing
+    _ = reg.Register("ProdDefaultsSeeder", &seeders.ProdDefaultsSeeder{}) // tags: production
+    _ = reg.Register("RoleSeeder", &seeders.RoleSeeder{})                 // no tags
 
-    runner.Register("DevUserSeeder", &seeders.DevUserSeeder{})       // tags: development, testing
-    runner.Register("ProdDefaultsSeeder", &seeders.ProdDefaultsSeeder{}) // tags: production
-    runner.Register("RoleSeeder", &seeders.RoleSeeder{})             // no tags
+    runner := seeder.NewRunner(reg, db, nil)
 
     // Run only development seeders
     if err := runner.RunByTag("development"); err != nil {

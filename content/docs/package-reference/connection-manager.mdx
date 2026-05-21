@@ -9,7 +9,9 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 The Connection Manager handles multiple named database connections with configurable connection pooling. It works with any `database/sql`-compatible driver.
 
-**Import path:** `github.com/gopackx/go-migration/database`
+**Import path:** `github.com/gopackx/go-migration/pkg/database`
+
+Driver implementations live in `github.com/gopackx/go-migration/pkg/database/drivers`.
 
 For conceptual documentation, see [Connection Manager](/docs/connections/connection-manager).
 
@@ -26,7 +28,7 @@ func NewManager() *Manager
 **Returns:** `*Manager`
 
 ```go
-import "github.com/gopackx/go-migration/database"
+import "github.com/gopackx/go-migration/pkg/database"
 
 mgr := database.NewManager()
 defer mgr.Close()
@@ -39,28 +41,29 @@ defer mgr.Close()
 Registers a database driver with the manager.
 
 ```go
-func (m *Manager) RegisterDriver(name string, driver string)
+func (m *Manager) RegisterDriver(name string, driver Driver)
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `name` | `string` | A name you assign to this driver registration |
-| `driver` | `string` | The driver name as registered with `database/sql` |
+| `name` | `string` | The driver name connections reference via their `Driver` field |
+| `driver` | `database.Driver` | A driver implementation (`Open(ConnectionConfig) (*sql.DB, error)` + `Name() string`) |
 
 ```go
 import (
+    "github.com/gopackx/go-migration/pkg/database/drivers"
     _ "github.com/lib/pq"
     _ "github.com/go-sql-driver/mysql"
     _ "github.com/mattn/go-sqlite3"
 )
 
-mgr.RegisterDriver("postgres", "postgres")
-mgr.RegisterDriver("mysql", "mysql")
-mgr.RegisterDriver("sqlite", "sqlite3")
+mgr.RegisterDriver("postgres", drivers.NewPostgresDriver())
+mgr.RegisterDriver("mysql", drivers.NewMySQLDriver())
+mgr.RegisterDriver("sqlite3", drivers.NewSQLiteDriver())
 ```
 
 <Callout type="info">
-  You must import the driver package with a blank identifier (`_`) so it registers itself with `database/sql` via its `init()` function.
+  The second argument is a `Driver` value, not a string. Use the constructors in the `drivers` package: `NewPostgresDriver()`, `NewMySQLDriver()`, `NewSQLiteDriver()`. You must also import the underlying `database/sql` driver package with a blank identifier (`_`) so it registers itself via its `init()` function.
 </Callout>
 
 See [Drivers](/docs/connections/drivers) for setup details for each database.
@@ -69,30 +72,81 @@ See [Drivers](/docs/connections/drivers) for setup details for each database.
 
 ## `mgr.AddConnection()`
 
-Registers a named connection with its DSN and pool settings.
+Registers a named connection with its discrete connection fields and pool settings. The actual connection is opened lazily on the first `Connection()` call. The first connection added becomes the default.
 
 ```go
-func (m *Manager) AddConnection(name string, config ConnectionConfig)
+func (m *Manager) AddConnection(name string, config ConnectionConfig) error
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `name` | `string` | Unique name for this connection |
-| `config` | `ConnectionConfig` | Connection configuration (driver, DSN, pool settings) |
+| `config` | `ConnectionConfig` | Connection configuration (driver, host, credentials, pool settings, options) |
+
+**Returns:** `error` — returns an error if `config.Driver` is empty.
 
 ```go
 import "time"
 
-mgr.AddConnection("primary", database.ConnectionConfig{
+err := mgr.AddConnection("primary", database.ConnectionConfig{
     Driver:          "postgres",
-    DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+    Host:            "localhost",
+    Port:            5432,
+    Database:        "myapp",
+    Username:        "user",
+    Password:        "pass",
     MaxOpenConns:    25,
     MaxIdleConns:    5,
     ConnMaxLifetime: 5 * time.Minute,
+    Options:         map[string]string{"sslmode": "disable"},
 })
+if err != nil {
+    log.Fatalf("add connection: %v", err)
+}
 ```
 
 See [Pool Configuration](/docs/connections/pool-configuration) for recommended pool values.
+
+---
+
+## `mgr.SetDefault()`
+
+Sets which named connection is the default. The connection must already be registered with `AddConnection()`.
+
+```go
+func (m *Manager) SetDefault(name string) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | The name of a registered connection |
+
+**Returns:** `error` — returns an error if the named connection is not registered.
+
+```go
+if err := mgr.SetDefault("primary"); err != nil {
+    log.Fatalf("set default: %v", err)
+}
+```
+
+---
+
+## `mgr.Default()`
+
+Returns the default `*sql.DB`. The first connection added becomes the default automatically unless changed with `SetDefault()`.
+
+```go
+func (m *Manager) Default() (*sql.DB, error)
+```
+
+**Returns:** `*sql.DB, error` — returns an error if no default has been set.
+
+```go
+db, err := mgr.Default()
+if err != nil {
+    log.Fatalf("get default connection: %v", err)
+}
+```
 
 ---
 
@@ -152,22 +206,34 @@ Configuration for a single database connection.
 ```go
 type ConnectionConfig struct {
     Driver          string
-    DSN             string
+    Host            string
+    Port            int
+    Database        string
+    Username        string
+    Password        string
     MaxOpenConns    int
     MaxIdleConns    int
     ConnMaxLifetime time.Duration
+    Options         map[string]string
 }
 ```
+
+There is **no** `DSN` field. Each driver builds its own DSN from these discrete fields; driver-specific parameters (like PostgreSQL's `sslmode`) go in `Options`.
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
 | `Driver` | `string` | Name of the registered driver | (required) |
-| `DSN` | `string` | Data source name (connection string) | (required) |
-| `MaxOpenConns` | `int` | Maximum number of open connections | `0` (unlimited) |
-| `MaxIdleConns` | `int` | Maximum number of idle connections | `2` |
-| `ConnMaxLifetime` | `time.Duration` | Maximum lifetime of a connection | `0` (no limit) |
+| `Host` | `string` | Database server hostname or IP | |
+| `Port` | `int` | Database server port | |
+| `Database` | `string` | Database name (or file path for SQLite) | |
+| `Username` | `string` | Database user | |
+| `Password` | `string` | Database password | |
+| `MaxOpenConns` | `int` | Maximum number of open connections | `0` → Go default (unlimited) |
+| `MaxIdleConns` | `int` | Maximum number of idle connections | `0` → Go default (`2`) |
+| `ConnMaxLifetime` | `time.Duration` | Maximum lifetime of a connection | `0` → Go default (no limit) |
+| `Options` | `map[string]string` | Driver-specific options, e.g. `{"sslmode": "disable"}` | `nil` |
 
-These settings map directly to Go's `*sql.DB` methods: `SetMaxOpenConns()`, `SetMaxIdleConns()`, and `SetConnMaxLifetime()`.
+Pool settings map directly to Go's `*sql.DB` methods: `SetMaxOpenConns()`, `SetMaxIdleConns()`, and `SetConnMaxLifetime()`. go-migration only calls these when the value is greater than zero, otherwise the `database/sql` defaults apply.
 
 See [Pool Configuration](/docs/connections/pool-configuration) for tuning guidance.
 
@@ -183,7 +249,8 @@ import (
     "log"
     "time"
 
-    "github.com/gopackx/go-migration/database"
+    "github.com/gopackx/go-migration/pkg/database"
+    "github.com/gopackx/go-migration/pkg/database/drivers"
     _ "github.com/lib/pq"
     _ "github.com/go-sql-driver/mysql"
 )
@@ -193,24 +260,34 @@ func main() {
     defer mgr.Close()
 
     // Register drivers
-    mgr.RegisterDriver("postgres", "postgres")
-    mgr.RegisterDriver("mysql", "mysql")
+    mgr.RegisterDriver("postgres", drivers.NewPostgresDriver())
+    mgr.RegisterDriver("mysql", drivers.NewMySQLDriver())
 
     // Add connections
     mgr.AddConnection("primary", database.ConnectionConfig{
         Driver:          "postgres",
-        DSN:             "postgres://user:pass@localhost:5432/myapp?sslmode=disable",
+        Host:            "localhost",
+        Port:            5432,
+        Database:        "myapp",
+        Username:        "user",
+        Password:        "pass",
         MaxOpenConns:    25,
         MaxIdleConns:    5,
         ConnMaxLifetime: 5 * time.Minute,
+        Options:         map[string]string{"sslmode": "disable"},
     })
 
     mgr.AddConnection("analytics", database.ConnectionConfig{
         Driver:          "mysql",
-        DSN:             "user:pass@tcp(localhost:3306)/analytics?parseTime=true",
+        Host:            "localhost",
+        Port:            3306,
+        Database:        "analytics",
+        Username:        "user",
+        Password:        "pass",
         MaxOpenConns:    10,
         MaxIdleConns:    3,
         ConnMaxLifetime: 5 * time.Minute,
+        Options:         map[string]string{"parseTime": "true"},
     })
 
     // Use connections
@@ -236,8 +313,10 @@ func main() {
 | Component | Method | Signature | Description |
 |-----------|--------|-----------|-------------|
 | Manager | `NewManager` | `NewManager() *Manager` | Create a manager |
-| Manager | `RegisterDriver` | `RegisterDriver(name, driver)` | Register a database driver |
-| Manager | `AddConnection` | `AddConnection(name, config)` | Add a named connection |
-| Manager | `Connection` | `Connection(name) (*sql.DB, error)` | Get a connection by name |
+| Manager | `RegisterDriver` | `RegisterDriver(name string, driver Driver)` | Register a database driver |
+| Manager | `AddConnection` | `AddConnection(name string, config ConnectionConfig) error` | Add a named connection |
+| Manager | `SetDefault` | `SetDefault(name string) error` | Set the default connection |
+| Manager | `Default` | `Default() (*sql.DB, error)` | Get the default connection |
+| Manager | `Connection` | `Connection(name string) (*sql.DB, error)` | Get a connection by name |
 | Manager | `Close` | `Close() error` | Close all connections |
-| Config | `ConnectionConfig` | struct | Driver, DSN, and pool settings |
+| Config | `ConnectionConfig` | struct | Driver, host, credentials, pool settings, and options |

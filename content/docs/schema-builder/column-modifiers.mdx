@@ -21,6 +21,7 @@ bp.BigInteger("count").Unsigned().Default(0)
 |----------|-------------|---------|
 | `.Nullable()` | Allow NULL values | `bp.String("phone", 20).Nullable()` |
 | `.Default(value)` | Set a default value | `bp.Boolean("active").Default(true)` |
+| `.DefaultRaw(expression)` | Set a raw SQL expression as the default | `bp.Timestamp("created_at").DefaultRaw("CURRENT_TIMESTAMP")` |
 | `.Primary()` | Set as primary key | `bp.UUID("id").Primary()` |
 | `.Unique()` | Add a unique constraint | `bp.String("email", 255).Unique()` |
 | `.Unsigned()` | Make numeric column unsigned | `bp.Integer("age").Unsigned()` |
@@ -53,6 +54,19 @@ bp.JSON("settings").Default("{}")
   The default value is set at the database level, not in Go code. The database engine applies it when a row is inserted without specifying that column.
 </Callout>
 
+## DefaultRaw
+
+`Default` quotes its value as a literal. When you need the default to be a SQL expression evaluated by the database — such as a function call — use `.DefaultRaw()` instead. The expression is inserted verbatim, without quoting:
+
+```go
+bp.Timestamp("created_at").DefaultRaw("CURRENT_TIMESTAMP")
+bp.UUID("id").DefaultRaw("gen_random_uuid()")
+```
+
+<Callout type="warn">
+  The expression you pass to `DefaultRaw` is database-specific. For example, `gen_random_uuid()` is PostgreSQL-specific. If you target multiple databases, make sure the expression is supported by each one.
+</Callout>
+
 ## Primary
 
 Designate a column as the primary key:
@@ -61,10 +75,10 @@ Designate a column as the primary key:
 bp.UUID("id").Primary()
 ```
 
-For auto-incrementing integer primary keys, use `bp.ID()` instead — it combines `BigInteger`, `Unsigned`, `AutoIncrement`, and `Primary` in one call:
+For auto-incrementing integer primary keys, use `bp.ID()` instead — it combines `BigInteger`, `Unsigned`, `AutoIncrement`, and `Primary` in one call and creates a column named `id`:
 
 ```go
-bp.ID("id")
+bp.ID()
 ```
 
 ## Unique
@@ -119,14 +133,14 @@ bp.BigInteger("parent_id").Unsigned().Nullable()
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 type CreateOrdersTable struct{}
 
-func (m *CreateOrdersTable) Up(s *schema.Builder) {
-    s.Create("orders", func(bp *schema.Blueprint) {
-        bp.ID("id")
+func (m *CreateOrdersTable) Up(s *schema.Builder) error {
+    return s.Create("orders", func(bp *schema.Blueprint) {
+        bp.ID()
         bp.BigInteger("user_id").Unsigned()
         bp.String("order_number", 50).Unique()
         bp.String("status", 20).Default("pending")
@@ -135,13 +149,12 @@ func (m *CreateOrdersTable) Up(s *schema.Builder) {
         bp.Text("notes").Nullable()
         bp.Boolean("paid").Default(false)
         bp.Timestamp("shipped_at").Nullable()
-        bp.Timestamp("created_at").Nullable()
-        bp.Timestamp("updated_at").Nullable()
+        bp.Timestamps()
     })
 }
 
-func (m *CreateOrdersTable) Down(s *schema.Builder) {
-    s.DropIfExists("orders")
+func (m *CreateOrdersTable) Down(s *schema.Builder) error {
+    return s.DropIfExists("orders")
 }
 ```
 

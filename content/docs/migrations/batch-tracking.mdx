@@ -20,18 +20,18 @@ Suppose you have four migrations and run them in two separate `m.Up()` calls:
 **First run** — registers and runs two migrations:
 
 ```go
-m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{})
+m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{})
 m.Up() // Both get batch 1
 ```
 
 **Second run** — adds two more migrations and runs again:
 
 ```go
-m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
-m.Register("20240201_add_phone_to_users", &migrations.AddPhoneToUsers{})
-m.Register("20240215_create_comments_table", &migrations.CreateCommentsTable{})
+m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{})
+m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{})
+m.Register("20240201000001_add_phone_to_users", &migrations.AddPhoneToUsers{})
+m.Register("20240215000001_create_comments_table", &migrations.CreateCommentsTable{})
 m.Up() // Only the two new ones run, both get batch 2
 ```
 
@@ -39,10 +39,10 @@ The resulting tracking table looks like:
 
 | Migration | Batch |
 |-----------|-------|
-| `20240101_create_users_table` | 1 |
-| `20240115_create_posts_table` | 1 |
-| `20240201_add_phone_to_users` | 2 |
-| `20240215_create_comments_table` | 2 |
+| `20240101000001_create_users_table` | 1 |
+| `20240115000001_create_posts_table` | 1 |
+| `20240201000001_add_phone_to_users` | 2 |
+| `20240215000001_create_comments_table` | 2 |
 
 ## The Migrations Table
 

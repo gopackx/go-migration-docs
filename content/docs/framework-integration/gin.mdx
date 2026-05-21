@@ -24,18 +24,18 @@ This example shows a Gin application that runs migrations on startup and exposes
 
 ### Define a Migration
 
-```go title="migrations/20240101_create_users_table.go"
+```go title="migrations/20240101120000_create_users_table.go"
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 type CreateUsersTable struct{}
 
-func (m *CreateUsersTable) Up(s *schema.Builder) {
-    s.Create("users", func(bp *schema.Blueprint) {
-        bp.ID("id")
+func (m *CreateUsersTable) Up(s *schema.Builder) error {
+    return s.Create("users", func(bp *schema.Blueprint) {
+        bp.ID()
         bp.String("name", 255)
         bp.String("email", 255).Unique()
         bp.Timestamp("created_at").Nullable()
@@ -43,8 +43,8 @@ func (m *CreateUsersTable) Up(s *schema.Builder) {
     })
 }
 
-func (m *CreateUsersTable) Down(s *schema.Builder) {
-    s.DropIfExists("users")
+func (m *CreateUsersTable) Down(s *schema.Builder) error {
+    return s.DropIfExists("users")
 }
 ```
 
@@ -66,7 +66,7 @@ import (
     "github.com/gin-gonic/gin"
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     "your-project/migrations"
 )
 
@@ -82,7 +82,7 @@ func main() {
     m := migrator.New(db)
 
     // 3. Register migrations
-    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
+    m.Register("20240101120000_create_users_table", &migrations.CreateUsersTable{})
 
     // 4. Run pending migrations
     if err := m.Up(); err != nil {

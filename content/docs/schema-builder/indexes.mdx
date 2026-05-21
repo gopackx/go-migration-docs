@@ -14,17 +14,17 @@ Indexes improve query performance by allowing the database to find rows faster. 
 Create an index on a single column using `bp.Index()`:
 
 ```go
-bp.Index("idx_users_email", "email")
+bp.Index("email")
 ```
 
-The first argument is the index name, and the second is the column to index.
+Pass the name of the column to index. The index name is generated automatically — there is no name parameter.
 
 ## Composite Index
 
 Index multiple columns together by passing additional column names:
 
 ```go
-bp.Index("idx_posts_user_status", "user_id", "status")
+bp.Index("user_id", "status")
 ```
 
 Composite indexes are useful for queries that filter or sort on multiple columns simultaneously.
@@ -34,13 +34,13 @@ Composite indexes are useful for queries that filter or sort on multiple columns
 Create a unique index that enforces uniqueness across one or more columns:
 
 ```go
-bp.UniqueIndex("idx_users_email_unique", "email")
+bp.UniqueIndex("email")
 ```
 
 For composite unique indexes:
 
 ```go
-bp.UniqueIndex("idx_subscriptions_user_plan", "user_id", "plan_id")
+bp.UniqueIndex("user_id", "plan_id")
 ```
 
 This ensures no two rows can have the same combination of `user_id` and `plan_id`.
@@ -49,15 +49,18 @@ This ensures no two rows can have the same combination of `user_id` and `plan_id
   The `.Unique()` column modifier adds a unique constraint on a single column. Use `bp.UniqueIndex()` when you need a composite unique constraint across multiple columns.
 </Callout>
 
-## Index Naming Conventions
+## Index Naming
 
-Choose descriptive index names that indicate the table and columns:
+Index names are generated automatically from the index type, the table name, and the column names — you do not (and cannot) pass a name yourself. The name uses a type prefix followed by the table and each column:
 
-| Pattern | Example |
-|---------|---------|
-| `idx_{table}_{column}` | `idx_users_email` |
-| `idx_{table}_{col1}_{col2}` | `idx_posts_user_id_status` |
-| `idx_{table}_{column}_unique` | `idx_users_email_unique` |
+| Method | Prefix | Example (table `users`) |
+|--------|--------|-------------------------|
+| `Index` | `idx` | `idx_users_email` |
+| `UniqueIndex` | `uniq` | `uniq_users_email` |
+| `FulltextIndex` | `ft` | `ft_articles_title_body` |
+| `SpatialIndex` | `sp` | `sp_places_location` |
+
+These generated names are what you pass to [`bp.DropIndex()`](/docs/schema-builder/altering-tables#dropping-indexes-and-foreign-keys) when removing an index.
 
 ## Complete Example
 
@@ -65,14 +68,14 @@ Choose descriptive index names that indicate the table and columns:
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 type CreateArticlesTable struct{}
 
-func (m *CreateArticlesTable) Up(s *schema.Builder) {
-    s.Create("articles", func(bp *schema.Blueprint) {
-        bp.ID("id")
+func (m *CreateArticlesTable) Up(s *schema.Builder) error {
+    return s.Create("articles", func(bp *schema.Blueprint) {
+        bp.ID()
         bp.BigInteger("author_id").Unsigned()
         bp.BigInteger("category_id").Unsigned()
         bp.String("title", 255)
@@ -80,25 +83,24 @@ func (m *CreateArticlesTable) Up(s *schema.Builder) {
         bp.Text("content")
         bp.String("status", 20).Default("draft")
         bp.Timestamp("published_at").Nullable()
-        bp.Timestamp("created_at").Nullable()
-        bp.Timestamp("updated_at").Nullable()
+        bp.Timestamps()
 
         // Single-column index
-        bp.Index("idx_articles_author_id", "author_id")
+        bp.Index("author_id")
 
         // Composite index for filtering by author and status
-        bp.Index("idx_articles_author_status", "author_id", "status")
+        bp.Index("author_id", "status")
 
         // Unique index on slug
-        bp.UniqueIndex("idx_articles_slug_unique", "slug")
+        bp.UniqueIndex("slug")
 
         // Composite unique index
-        bp.UniqueIndex("idx_articles_author_title", "author_id", "title")
+        bp.UniqueIndex("author_id", "title")
     })
 }
 
-func (m *CreateArticlesTable) Down(s *schema.Builder) {
-    s.DropIfExists("articles")
+func (m *CreateArticlesTable) Down(s *schema.Builder) error {
+    return s.DropIfExists("articles")
 }
 ```
 
@@ -108,7 +110,7 @@ You can add indexes in an `Alter` call:
 
 ```go
 s.Alter("users", func(bp *schema.Blueprint) {
-    bp.Index("idx_users_created_at", "created_at")
+    bp.Index("created_at")
 })
 ```
 
@@ -130,7 +132,7 @@ Pass the column names you want to include in the fulltext index. The generated S
 
 ```go title="migrations/20240501_create_articles_table.go"
 s.Create("articles", func(bp *schema.Blueprint) {
-    bp.ID("id")
+    bp.ID()
     bp.String("title", 255)
     bp.Text("body")
     bp.Timestamp("created_at").Nullable()
@@ -158,7 +160,7 @@ The generated SQL depends on the database grammar:
 
 ```go title="migrations/20240601_create_places_table.go"
 s.Create("places", func(bp *schema.Blueprint) {
-    bp.ID("id")
+    bp.ID()
     bp.String("name", 255)
     bp.String("location", 255)
     bp.Timestamp("created_at").Nullable()

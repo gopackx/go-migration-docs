@@ -11,27 +11,33 @@ go-migration returns **typed error values** for common failure scenarios. This l
 
 ## Typed Error Values
 
-go-migration exports the following sentinel errors:
+go-migration exports the following sentinel errors. The `migrator` package re-defines the full set used across the system, while the `database` and `seeder` packages export the subset relevant to their domain:
 
-| Error | Description |
-|-------|-------------|
-| `ErrMigrationNotFound` | The requested migration name does not exist in the registry |
-| `ErrDuplicateMigration` | A migration with the same name has already been registered |
-| `ErrMigrationFailed` | A migration's `Up` or `Down` method returned an error |
-| `ErrRollbackFailed` | A rollback operation failed during execution |
-| `ErrSeederNotFound` | The requested seeder name does not exist in the registry |
-| `ErrCircularDependency` | Seeder dependencies form a cycle that cannot be resolved |
-| `ErrDatabaseConnection` | The database connection could not be established or was lost |
-| `ErrMigrationTableExists` | The migrations tracking table already exists |
-| `ErrNoMigrationsToRun` | No pending migrations were found to execute |
-| `ErrTransactionFailed` | A transaction commit or rollback failed |
+| Error | Package(s) | Description |
+|-------|------------|-------------|
+| `ErrMigrationNotFound` | `migrator` | The requested migration name does not exist in the registry |
+| `ErrDuplicateMigration` | `migrator` | A migration with the same name has already been registered |
+| `ErrInvalidMigrationName` | `migrator` | A migration name does not match the expected format |
+| `ErrTrackingTable` | `migrator` | The migration tracking table could not be read or written |
+| `ErrTransactionFailed` | `migrator`, `database` | A transaction (begin, commit, or rollback) failed |
+| `ErrConnectionFailed` | `migrator`, `database` | The database connection could not be established |
+| `ErrConnectionNotFound` | `migrator`, `database` | A named connection does not exist |
+| `ErrUnsupportedType` | `migrator` | A column type is not supported by the active grammar |
+| `ErrConfigValidation` | `migrator` | Configuration validation failed |
+| `ErrDriverNotFound` | `database` | No driver is registered for the given name |
+| `ErrNoDefault` | `database` | No default connection has been set |
+| `ErrSeederNotFound` | `migrator`, `seeder` | The requested seeder name does not exist in the registry |
+| `ErrDuplicateSeeder` | `migrator`, `seeder` | A seeder with the same name has already been registered |
+| `ErrInvalidSeederName` | `migrator`, `seeder` | A seeder name does not match the expected format |
+| `ErrCircularDependency` | `migrator`, `seeder` | Seeder dependencies form a cycle that cannot be resolved |
 
-These errors are defined in the `migrator` and `seeder` packages:
+These errors are defined in the `migrator`, `database`, and `seeder` packages:
 
 ```go
 import (
-    "github.com/gopackx/go-migration/migrator"
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/database"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/seeder"
 )
 ```
 
@@ -50,7 +56,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
 )
 
 func main() {
@@ -68,10 +74,12 @@ func main() {
         switch {
         case errors.Is(err, migrator.ErrDuplicateMigration):
             log.Println("A migration with the same name is already registered")
-        case errors.Is(err, migrator.ErrMigrationFailed):
-            log.Printf("Migration execution failed: %v", err)
-        case errors.Is(err, migrator.ErrNoMigrationsToRun):
-            log.Println("Database is already up to date")
+        case errors.Is(err, migrator.ErrMigrationNotFound):
+            log.Println("A referenced migration is not registered")
+        case errors.Is(err, migrator.ErrTransactionFailed):
+            log.Printf("Migration transaction failed: %v", err)
+        case errors.Is(err, migrator.ErrConnectionFailed):
+            log.Println("Could not connect to the database")
         default:
             log.Fatalf("Unexpected error: %v", err)
         }
@@ -85,11 +93,11 @@ func main() {
 
 ```go title="main.go"
 if err := m.Rollback(0); err != nil {
-    if errors.Is(err, migrator.ErrRollbackFailed) {
-        log.Printf("Rollback failed: %v", err)
+    if errors.Is(err, migrator.ErrTransactionFailed) {
+        log.Printf("Rollback transaction failed: %v", err)
         // Investigate the database state manually
-    } else if errors.Is(err, migrator.ErrNoMigrationsToRun) {
-        log.Println("Nothing to roll back")
+    } else if errors.Is(err, migrator.ErrMigrationNotFound) {
+        log.Println("A migration in the batch is no longer registered")
     } else {
         log.Fatalf("Unexpected rollback error: %v", err)
     }
@@ -103,7 +111,7 @@ import (
     "errors"
     "log"
 
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/seeder"
 )
 
 if err := runner.RunAll(); err != nil {
@@ -132,7 +140,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
 )
 
 func main() {
@@ -149,8 +157,11 @@ func main() {
     if err := m.Up(); err != nil {
         var migrationErr *migrator.MigrationError
         if errors.As(err, &migrationErr) {
-            log.Printf("Migration '%s' failed: %v", migrationErr.Name, migrationErr.Cause)
-            log.Printf("Direction: %s", migrationErr.Direction) // "up" or "down"
+            log.Printf("Migration '%s' failed: %v", migrationErr.MigrationName, migrationErr.Cause)
+            log.Printf("Failing SQL: %s", migrationErr.SQL)
+            if migrationErr.Position != "" {
+                log.Printf("Position: %s", migrationErr.Position)
+            }
         } else {
             log.Fatalf("Error: %v", err)
         }
@@ -162,9 +173,10 @@ The `MigrationError` type provides structured information about the failure:
 
 ```go
 type MigrationError struct {
-    Name      string // Migration name (e.g., "20240101_000001_create_users_table")
-    Direction string // "up" or "down"
-    Cause     error  // The underlying error
+    MigrationName string // Name of the migration that failed
+    SQL           string // The SQL statement that triggered the failure
+    Position      string // Position information from the DB (optional)
+    Cause         error  // The underlying error from the database driver
 }
 ```
 
@@ -179,7 +191,7 @@ When returning errors from your `Up` or `Down` methods, wrap them with `fmt.Erro
 ```go title="migrations/create_users_table.go"
 func (m *CreateUsersTable) Up(s *schema.Builder) error {
     err := s.Create("users", func(bp *schema.Blueprint) {
-        bp.ID("id")
+        bp.ID()
         bp.String("email", 255).Unique()
         bp.Timestamp("created_at")
     })
@@ -198,8 +210,8 @@ Common error scenarios you may encounter when using go-migration:
 
 | Scenario | Cause | Solution |
 |----------|-------|----------|
-| "migration table already exists" | Calling `m.Install()` when the migrations table is already created | Skip `m.Install()` if the table exists, or use `m.Up()` which handles table creation automatically |
-| "duplicate migration name" | Two migrations registered with the same name via `m.Register()` | Ensure each migration has a unique timestamp-prefixed name (e.g., `20240101_000001_create_users_table`) |
+| "tracking table" errors | The migrations tracking table could not be created or read | Ensure the database user has DDL privileges; `m.Up()` creates the tracking table automatically when it does not exist |
+| "duplicate migration name" | Two migrations registered with the same name via `m.Register()` | Ensure each migration has a unique timestamp-prefixed name (e.g., `20240101000001_create_users_table`) |
 | "migration not found" | Calling `m.Rollback()` or referencing a migration name that isn't registered | Verify the migration is registered with `m.Register()` before running operations |
 | "database connection refused" | The database server is not running or the connection string is incorrect | Check that the database is running, verify host/port/credentials, and test with `db.Ping()` |
 | "transaction deadlock" | Two concurrent migrations or queries are waiting on each other's locks | Avoid running migrations concurrently; use `DisableTransaction()` for long-running DDL operations that may conflict |
@@ -219,7 +231,7 @@ Common error scenarios you may encounter when using go-migration:
 
 - **Always check errors** — never discard the return value from `m.Up()`, `m.Rollback()`, or seeder operations
 - **Use `errors.Is()` for sentinel errors** — check for specific error types to handle known failure modes gracefully
-- **Use `errors.As()` for structured errors** — extract migration name and direction from `MigrationError` for detailed logging
+- **Use `errors.As()` for structured errors** — extract the migration name, failing SQL, and underlying cause from `MigrationError` for detailed logging
 - **Wrap errors with `%w`** — preserve the error chain in your migration `Up` and `Down` methods so callers can inspect the full context
 - **Log before exiting** — when a migration fails, log the error details before terminating to aid debugging
 

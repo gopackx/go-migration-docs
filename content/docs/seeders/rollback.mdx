@@ -64,8 +64,10 @@ The `Rollback` method should reverse whatever `Run` did. This gives you full con
 Use `runner.Rollback()` to roll back a specific seeder by its registered name:
 
 ```go
-runner := seeder.NewRunner(db)
-runner.Register("UserSeeder", &seeders.UserSeeder{})
+reg := seeder.NewRegistry()
+_ = reg.Register("UserSeeder", &seeders.UserSeeder{})
+
+runner := seeder.NewRunner(reg, db, nil)
 
 // Roll back the UserSeeder
 if err := runner.Rollback("UserSeeder"); err != nil {
@@ -116,7 +118,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/seeder"
     "your-project/seeders"
 )
 
@@ -127,10 +129,11 @@ func main() {
     }
     defer db.Close()
 
-    runner := seeder.NewRunner(db)
+    reg := seeder.NewRegistry()
+    _ = reg.Register("UserSeeder", &seeders.UserSeeder{})
+    _ = reg.Register("PostSeeder", &seeders.PostSeeder{})
 
-    runner.Register("UserSeeder", &seeders.UserSeeder{})
-    runner.Register("PostSeeder", &seeders.PostSeeder{})
+    runner := seeder.NewRunner(reg, db, nil)
 
     // Seed the database
     if err := runner.RunAll(); err != nil {

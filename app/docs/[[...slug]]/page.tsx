@@ -2,6 +2,7 @@ import { source } from "@/lib/source";
 import { DocsPage, DocsBody, DocsTitle, DocsDescription } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { mdxComponents } from "@/mdx-components";
+import { LLMActions } from "./llm-actions";
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -25,6 +26,7 @@ export default async function Page(props: {
       {page.data.description ? (
         <DocsDescription>{page.data.description}</DocsDescription>
       ) : null}
+      <LLMActions markdownPath={`${page.url}.mdx`} />
       <DocsBody>
         <MDX components={mdxComponents} />
       </DocsBody>

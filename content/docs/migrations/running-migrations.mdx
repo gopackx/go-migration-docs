@@ -69,7 +69,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     "your-project/migrations"
 )
 
@@ -82,8 +82,12 @@ func main() {
 
     m := migrator.New(db)
 
-    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+    if err := m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{}); err != nil {
+        log.Fatal(err)
+    }
 
     // Run all pending migrations
     if err := m.Up(); err != nil {
@@ -116,7 +120,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     "your-project/migrations"
 )
 
@@ -128,11 +132,16 @@ func main() {
     defer db.Close()
 
     m := migrator.New(db, migrator.WithProgress(func(e migrator.ProgressEvent) {
-        fmt.Printf("[%d/%d] %s %s (%s)\n", e.Index, e.Total, e.Direction, e.Name, e.Duration)
+        // Index is 0-based; add 1 for human-friendly "N of Total" display.
+        fmt.Printf("[%d/%d] %s %s (%s)\n", e.Index+1, e.Total, e.Direction, e.Name, e.Duration)
     }))
 
-    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+    if err := m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{}); err != nil {
+        log.Fatal(err)
+    }
 
     if err := m.Up(); err != nil {
         log.Fatal(err)
@@ -143,8 +152,8 @@ func main() {
 ### Example Output
 
 ```
-[1/2] up 20240101_create_users_table (12ms)
-[2/2] up 20240115_create_posts_table (8ms)
+[1/2] up 20240101000001_create_users_table (12ms)
+[2/2] up 20240115000001_create_posts_table (8ms)
 ```
 
 The `ProgressEvent` struct contains:
@@ -152,7 +161,7 @@ The `ProgressEvent` struct contains:
 | Field | Type | Description |
 |-------|------|-------------|
 | `Name` | `string` | The migration name |
-| `Index` | `int` | 1-based index of the current migration |
+| `Index` | `int` | 0-based index of the current migration |
 | `Total` | `int` | Total number of migrations being executed |
 | `Duration` | `time.Duration` | Time taken for this migration |
 | `Direction` | `string` | `"up"` or `"down"` |
@@ -162,6 +171,25 @@ Progress events fire for both `Up()` and `Rollback()` operations. The `Direction
 <Callout type="info">
   The progress callback is invoked after each migration completes successfully. If a migration fails, no progress event is emitted for it.
 </Callout>
+
+## Sentinel Errors
+
+Errors returned during execution wrap exported sentinels you can inspect with `errors.Is`:
+
+| Error | Meaning |
+|-------|---------|
+| `migrator.ErrMigrationNotFound` | A recorded migration (e.g. during rollback or reset) is not registered |
+| `migrator.ErrTransactionFailed` | A migration's transaction failed to begin, commit, or roll back |
+| `migrator.ErrTrackingTable` | The migration tracking table could not be created or read |
+
+```go
+if err := m.Up(); err != nil {
+    if errors.Is(err, migrator.ErrTrackingTable) {
+        // handle tracking-table failure
+    }
+    log.Fatal(err)
+}
+```
 
 ## What's Next?
 

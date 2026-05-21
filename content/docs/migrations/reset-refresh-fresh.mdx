@@ -56,6 +56,13 @@ if err := m.Fresh(); err != nil {
 }
 ```
 
+<Callout type="info">
+  `Fresh()` requires a grammar to be configured so it can compile the "drop all
+  tables" statement. Construct the migrator with `WithGrammar`, e.g.
+  `migrator.New(db, migrator.WithGrammar(&grammars.PostgresGrammar{}))`.
+  Without a grammar, `Fresh()` returns an error.
+</Callout>
+
 <Callout type="error">
   `Fresh()` drops every table in the database, including the migrations tracking table. This is the most destructive operation available. Never use it on a production database.
 </Callout>
@@ -80,7 +87,8 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema/grammars"
     "your-project/migrations"
 )
 
@@ -91,19 +99,30 @@ func main() {
     }
     defer db.Close()
 
-    m := migrator.New(db)
+    // WithGrammar is required for Fresh().
+    m := migrator.New(db, migrator.WithGrammar(&grammars.PostgresGrammar{}))
 
-    m.Register("20240101_create_users_table", &migrations.CreateUsersTable{})
-    m.Register("20240115_create_posts_table", &migrations.CreatePostsTable{})
+    if err := m.Register("20240101000001_create_users_table", &migrations.CreateUsersTable{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := m.Register("20240115000001_create_posts_table", &migrations.CreatePostsTable{}); err != nil {
+        log.Fatal(err)
+    }
 
     // Option 1: Roll back everything
-    m.Reset()
+    if err := m.Reset(); err != nil {
+        log.Fatal(err)
+    }
 
     // Option 2: Roll back everything, then re-run
-    m.Refresh()
+    if err := m.Refresh(); err != nil {
+        log.Fatal(err)
+    }
 
     // Option 3: Drop all tables, then run from scratch
-    m.Fresh()
+    if err := m.Fresh(); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 

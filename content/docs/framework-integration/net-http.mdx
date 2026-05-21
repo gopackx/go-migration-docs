@@ -24,28 +24,29 @@ This example shows a `net/http` server that runs migrations on startup and expos
 
 ### Define a Migration
 
-```go title="migrations/20240101_create_orders_table.go"
+```go title="migrations/20240401120000_create_products_table.go"
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
-type CreateOrdersTable struct{}
+type CreateProductsTable struct{}
 
-func (m *CreateOrdersTable) Up(s *schema.Builder) {
-    s.Create("orders", func(bp *schema.Blueprint) {
-        bp.ID("id")
-        bp.BigInteger("user_id").Unsigned()
-        bp.Decimal("total", 12, 2)
-        bp.String("status", 50).Default("pending")
+func (m *CreateProductsTable) Up(s *schema.Builder) error {
+    return s.Create("products", func(bp *schema.Blueprint) {
+        bp.ID()
+        bp.String("name", 255)
+        bp.Text("description").Nullable()
+        bp.Decimal("price", 10, 2)
+        bp.Integer("stock").Default(0)
         bp.Timestamp("created_at").Nullable()
         bp.Timestamp("updated_at").Nullable()
     })
 }
 
-func (m *CreateOrdersTable) Down(s *schema.Builder) {
-    s.DropIfExists("orders")
+func (m *CreateProductsTable) Down(s *schema.Builder) error {
+    return s.DropIfExists("products")
 }
 ```
 
@@ -68,7 +69,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     "your-project/migrations"
 )
 
@@ -84,7 +85,7 @@ func main() {
     m := migrator.New(db)
 
     // 3. Register migrations
-    m.Register("20240101_create_orders_table", &migrations.CreateOrdersTable{})
+    m.Register("20240401120000_create_products_table", &migrations.CreateProductsTable{})
 
     // 4. Run pending migrations
     if err := m.Up(); err != nil {

@@ -20,7 +20,7 @@ package seeders
 import (
     "database/sql"
 
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/seeder"
 )
 
 func init() {
@@ -44,7 +44,7 @@ When using `migrator.Run()`, auto-registered seeders are discovered automaticall
 package main
 
 import (
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     _ "your-project/migrations"
     _ "your-project/seeders" // triggers init() auto-registration
 )
@@ -55,12 +55,12 @@ func main() {
 ```
 
 <Callout type="info">
-  `seeder.AutoRegister()` panics on duplicate names, just like `migrator.AutoRegister()`. This ensures configuration mistakes are caught at startup.
+  `seeder.AutoRegister()` panics on duplicate names and on empty/whitespace-only names, just like `migrator.AutoRegister()`. This ensures configuration mistakes are caught at startup.
 </Callout>
 
 ## Manual Registration
 
-For more control, you can register seeders manually with the runner:
+For more control, build a `Registry`, register your seeders on it, then hand it to a `Runner`:
 
 ```go title="main.go"
 package main
@@ -71,7 +71,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/seeder"
     "your-project/seeders"
 )
 
@@ -82,11 +82,19 @@ func main() {
     }
     defer db.Close()
 
-    runner := seeder.NewRunner(db)
+    reg := seeder.NewRegistry()
+    if err := reg.Register("UserSeeder", &seeders.UserSeeder{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := reg.Register("PostSeeder", &seeders.PostSeeder{}); err != nil {
+        log.Fatal(err)
+    }
+    if err := reg.Register("RoleSeeder", &seeders.RoleSeeder{}); err != nil {
+        log.Fatal(err)
+    }
 
-    runner.Register("UserSeeder", &seeders.UserSeeder{})
-    runner.Register("PostSeeder", &seeders.PostSeeder{})
-    runner.Register("RoleSeeder", &seeders.RoleSeeder{})
+    // The logger may be nil to skip logging.
+    runner := seeder.NewRunner(reg, db, nil)
 
     // Run all seeders
     if err := runner.RunAll(); err != nil {
@@ -96,6 +104,10 @@ func main() {
     log.Println("All seeders completed successfully!")
 }
 ```
+
+<Callout type="info">
+  `Registry.Register()` returns an error — it wraps `seeder.ErrInvalidSeederName` for empty names and `seeder.ErrDuplicateSeeder` for duplicates. Unlike `AutoRegister()`, it does not panic.
+</Callout>
 
 ## Running All Seeders
 
@@ -111,9 +123,9 @@ if err := runner.RunAll(); err != nil {
 
 <Step>
 
-### Registration Order
+### Execution Order
 
-Seeders run in the order they were registered, unless [dependencies](/docs/seeders/dependencies) override the order.
+Without dependencies, seeders run in a deterministic order (sorted by name). [Dependencies](/docs/seeders/dependencies) override this so that a seeder always runs after the seeders it depends on.
 
 </Step>
 
@@ -160,7 +172,7 @@ import (
 
     _ "github.com/lib/pq"
 
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/seeder"
     "your-project/seeders"
 )
 
@@ -171,11 +183,18 @@ func main() {
     }
     defer db.Close()
 
-    runner := seeder.NewRunner(db)
+    reg := seeder.NewRegistry()
+    for name, s := range map[string]seeder.Seeder{
+        "UserSeeder": &seeders.UserSeeder{},
+        "RoleSeeder": &seeders.RoleSeeder{},
+        "PostSeeder": &seeders.PostSeeder{},
+    } {
+        if err := reg.Register(name, s); err != nil {
+            log.Fatal(err)
+        }
+    }
 
-    runner.Register("UserSeeder", &seeders.UserSeeder{})
-    runner.Register("RoleSeeder", &seeders.RoleSeeder{})
-    runner.Register("PostSeeder", &seeders.PostSeeder{})
+    runner := seeder.NewRunner(reg, db, nil)
 
     // Check if a specific seeder was requested
     if len(os.Args) > 1 {
@@ -196,7 +215,7 @@ func main() {
 ```
 
 <Callout type="info">
-  The name passed to `runner.Run()` must match the name used in `runner.Register()` exactly. If the name doesn't match any registered seeder, an error is returned.
+  The name passed to `runner.Run()` must match the name used in `reg.Register()` exactly. If the name doesn't match any registered seeder, `seeder.ErrSeederNotFound` is returned.
 </Callout>
 
 ## What's Next?

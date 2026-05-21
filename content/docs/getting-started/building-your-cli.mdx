@@ -62,9 +62,9 @@ import (
     "your-project/internal/infrastructure/database/seeders"
     _ "your-project/internal/infrastructure/database/migrations"
 
-    "github.com/gopackx/go-migration/migrator"
-    "github.com/gopackx/go-migration/schema/grammars"
-    "github.com/gopackx/go-migration/seeder"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema/grammars"
+    "github.com/gopackx/go-migration/pkg/seeder"
 )
 
 func main() {
@@ -75,12 +75,17 @@ func main() {
     defer db.Close()
 
     m := migrator.New(db,
-        migrator.WithGrammar(&grammars.PostgresGrammar{}),
+        migrator.WithGrammar(grammars.NewPostgresGrammar()),
         migrator.WithAutoDiscover(),
     )
 
-    runner := seeder.NewRunner(db)
-    runner.Register("UserSeeder", &seeders.UserSeeder{})
+    // Seeders are registered in a Registry, which is passed to NewRunner
+    // along with the *sql.DB and an optional logger (nil = no logging).
+    registry := seeder.NewRegistry()
+    if err := registry.Register("UserSeeder", &seeders.UserSeeder{}); err != nil {
+        log.Fatal(err)
+    }
+    runner := seeder.NewRunner(registry, db, nil)
 
     if len(os.Args) < 2 {
         printUsage()
@@ -123,7 +128,7 @@ func main() {
         }
         for _, s := range statuses {
             applied := "Pending"
-            if s.Ran {
+            if s.Applied {
                 applied = fmt.Sprintf("Batch %d", s.Batch)
             }
             fmt.Printf("  %-40s %s\n", s.Name, applied)

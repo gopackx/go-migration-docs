@@ -9,7 +9,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 The Schema Builder provides a fluent API for creating, altering, and inspecting database tables. It consists of three main components: the Builder, the Blueprint, and the Grammar.
 
-**Import path:** `github.com/gopackx/go-migration/schema`
+**Import path:** `github.com/gopackx/go-migration/pkg/schema`
 
 For conceptual documentation, see [Schema Builder](/docs/schema-builder/creating-tables).
 
@@ -24,7 +24,7 @@ The `*schema.Builder` is passed to your migration's `Up` and `Down` methods. It 
 Creates a new table with columns defined in the Blueprint callback.
 
 ```go
-func (s *Builder) Create(table string, callback func(bp *Blueprint))
+func (s *Builder) Create(table string, callback func(bp *Blueprint)) error
 ```
 
 | Parameter | Type | Description |
@@ -32,9 +32,11 @@ func (s *Builder) Create(table string, callback func(bp *Blueprint))
 | `table` | `string` | Name of the table to create |
 | `callback` | `func(bp *Blueprint)` | Function that defines columns, indexes, and constraints |
 
+**Returns:** `error`
+
 ```go
-s.Create("users", func(bp *schema.Blueprint) {
-    bp.ID("id")
+return s.Create("users", func(bp *schema.Blueprint) {
+    bp.ID()
     bp.String("name", 255)
     bp.String("email", 255).Unique()
     bp.Timestamp("created_at").Nullable()
@@ -48,7 +50,7 @@ See [Creating Tables](/docs/schema-builder/creating-tables).
 Modifies an existing table — add columns, drop columns, or add constraints.
 
 ```go
-func (s *Builder) Alter(table string, callback func(bp *Blueprint))
+func (s *Builder) Alter(table string, callback func(bp *Blueprint)) error
 ```
 
 | Parameter | Type | Description |
@@ -56,8 +58,10 @@ func (s *Builder) Alter(table string, callback func(bp *Blueprint))
 | `table` | `string` | Name of the table to alter |
 | `callback` | `func(bp *Blueprint)` | Function that defines modifications |
 
+**Returns:** `error`
+
 ```go
-s.Alter("users", func(bp *schema.Blueprint) {
+return s.Alter("users", func(bp *schema.Blueprint) {
     bp.String("phone", 20).Nullable()
 })
 ```
@@ -69,15 +73,17 @@ See [Altering Tables](/docs/schema-builder/altering-tables).
 Drops a table. Errors if the table does not exist.
 
 ```go
-func (s *Builder) Drop(table string)
+func (s *Builder) Drop(table string) error
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `table` | `string` | Name of the table to drop |
 
+**Returns:** `error`
+
 ```go
-s.Drop("posts")
+return s.Drop("posts")
 ```
 
 ### `s.DropIfExists()`
@@ -85,11 +91,13 @@ s.Drop("posts")
 Drops a table only if it exists. Safe to use in `Down` methods.
 
 ```go
-func (s *Builder) DropIfExists(table string)
+func (s *Builder) DropIfExists(table string) error
 ```
 
+**Returns:** `error`
+
 ```go
-s.DropIfExists("posts")
+return s.DropIfExists("posts")
 ```
 
 ### `s.Rename()`
@@ -97,7 +105,7 @@ s.DropIfExists("posts")
 Renames an existing table.
 
 ```go
-func (s *Builder) Rename(from string, to string)
+func (s *Builder) Rename(from string, to string) error
 ```
 
 | Parameter | Type | Description |
@@ -105,8 +113,10 @@ func (s *Builder) Rename(from string, to string)
 | `from` | `string` | Current table name |
 | `to` | `string` | New table name |
 
+**Returns:** `error`
+
 ```go
-s.Rename("posts", "articles")
+return s.Rename("posts", "articles")
 ```
 
 ### `s.HasTable()`
@@ -114,13 +124,17 @@ s.Rename("posts", "articles")
 Checks if a table exists in the database.
 
 ```go
-func (s *Builder) HasTable(table string) bool
+func (s *Builder) HasTable(table string) (bool, error)
 ```
 
-**Returns:** `bool`
+**Returns:** `(bool, error)`
 
 ```go
-if s.HasTable("users") {
+exists, err := s.HasTable("users")
+if err != nil {
+    return err
+}
+if exists {
     // Table exists
 }
 ```
@@ -130,7 +144,7 @@ if s.HasTable("users") {
 Checks if a column exists in a table.
 
 ```go
-func (s *Builder) HasColumn(table string, column string) bool
+func (s *Builder) HasColumn(table string, column string) (bool, error)
 ```
 
 | Parameter | Type | Description |
@@ -138,11 +152,15 @@ func (s *Builder) HasColumn(table string, column string) bool
 | `table` | `string` | Table name |
 | `column` | `string` | Column name |
 
-**Returns:** `bool`
+**Returns:** `(bool, error)`
 
 ```go
-if !s.HasColumn("users", "phone") {
-    s.Alter("users", func(bp *schema.Blueprint) {
+exists, err := s.HasColumn("users", "phone")
+if err != nil {
+    return err
+}
+if !exists {
+    return s.Alter("users", func(bp *schema.Blueprint) {
         bp.String("phone", 20).Nullable()
     })
 }
@@ -155,15 +173,17 @@ See [Utility Operations](/docs/schema-builder/utility-operations) for more examp
 Executes one or more raw SQL statements directly, bypassing the fluent API. Useful for materialized views, custom DDL, extensions, triggers, or anything not covered by the Builder.
 
 ```go
-func (s *Builder) RawExec(statements ...string)
+func (s *Builder) RawExec(statements ...string) error
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `statements` | `...string` | One or more raw SQL statements to execute sequentially |
 
+**Returns:** `error`
+
 ```go
-s.RawExec(
+return s.RawExec(
     "CREATE EXTENSION IF NOT EXISTS pgcrypto",
     `CREATE MATERIALIZED VIEW monthly_sales AS
      SELECT date_trunc('month', created_at) AS month, SUM(amount) AS total
@@ -181,7 +201,7 @@ The `*schema.Blueprint` is received inside `Create` and `Alter` callbacks. Colum
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `ID` | `bp.ID(name string)` | Auto-incrementing unsigned big integer primary key |
+| `ID` | `bp.ID()` | Auto-incrementing unsigned big integer primary key named `id` |
 | `String` | `bp.String(name string, length int)` | Variable-length string (`VARCHAR`) |
 | `Text` | `bp.Text(name string)` | Unlimited-length text |
 | `Integer` | `bp.Integer(name string)` | 32-bit integer |
@@ -194,18 +214,30 @@ The `*schema.Blueprint` is received inside `Create` and `Alter` callbacks. Colum
 | `UUID` | `bp.UUID(name string)` | UUID string |
 | `JSON` | `bp.JSON(name string)` | JSON data |
 | `Binary` | `bp.Binary(name string)` | Binary/blob data |
+| `Enum` | `bp.Enum(name string, allowed []string)` | Enumerated type with allowed values |
+| `Char` | `bp.Char(name string, length int)` | Fixed-length character string (`CHAR(n)`) |
+| `LongText` | `bp.LongText(name string)` | Long text (MySQL: `LONGTEXT`, others: `TEXT`) |
+| `MediumText` | `bp.MediumText(name string)` | Medium text (MySQL: `MEDIUMTEXT`, others: `TEXT`) |
+| `TinyInt` | `bp.TinyInt(name string)` | Tiny integer (MySQL: `TINYINT`, others: `SMALLINT`/`INTEGER`) |
+| `SmallInt` | `bp.SmallInt(name string)` | Small integer |
+| `Timestamps` | `bp.Timestamps()` | Adds nullable `created_at` and `updated_at` timestamps |
+| `SoftDeletes` | `bp.SoftDeletes()` | Adds a nullable `deleted_at` timestamp |
 
 ```go
 s.Create("products", func(bp *schema.Blueprint) {
-    bp.ID("id")
+    bp.ID()
     bp.String("name", 255)
     bp.Decimal("price", 10, 2)
     bp.Integer("stock").Default(0)
     bp.Boolean("active").Default(true)
     bp.JSON("metadata").Nullable()
-    bp.Timestamp("created_at").Nullable()
+    bp.Timestamps()
 })
 ```
+
+<Callout type="info">
+  `Timestamps()` and `SoftDeletes()` return nothing — they add columns directly to the Blueprint rather than returning a chainable column definition.
+</Callout>
 
 See [Column Types](/docs/schema-builder/column-types) for detailed usage of each type.
 
@@ -218,7 +250,8 @@ Modifiers are chainable methods called on the column definition returned by any 
 | Modifier | Signature | Description |
 |----------|-----------|-------------|
 | `Nullable` | `.Nullable()` | Allow NULL values |
-| `Default` | `.Default(value interface{})` | Set a default value |
+| `Default` | `.Default(value any)` | Set a default value |
+| `DefaultRaw` | `.DefaultRaw(expression string)` | Set a raw SQL expression as the default value |
 | `Primary` | `.Primary()` | Set as primary key |
 | `Unique` | `.Unique()` | Add a unique constraint |
 | `Unsigned` | `.Unsigned()` | Make numeric column unsigned |
@@ -228,6 +261,7 @@ Modifiers are chainable methods called on the column definition returned by any 
 bp.String("email", 255).Unique()
 bp.Integer("age").Unsigned().Nullable()
 bp.Boolean("active").Default(true)
+bp.Timestamp("created_at").DefaultRaw("CURRENT_TIMESTAMP")
 bp.BigInteger("id").AutoIncrement().Primary()
 ```
 
@@ -235,11 +269,13 @@ See [Column Modifiers](/docs/schema-builder/column-modifiers).
 
 ---
 
-## Blueprint Methods — Drop Column
+## Blueprint Methods — Alter Operations
+
+These methods queue commands inside `Alter` callbacks.
 
 ### `bp.DropColumn()`
 
-Removes a column from the table (used inside `Alter` callbacks).
+Removes a column from the table.
 
 ```go
 func (bp *Blueprint) DropColumn(name string)
@@ -251,29 +287,72 @@ s.Alter("users", func(bp *schema.Blueprint) {
 })
 ```
 
+### `bp.RenameColumn()`
+
+Renames an existing column.
+
+```go
+func (bp *Blueprint) RenameColumn(from string, to string)
+```
+
+```go
+s.Alter("users", func(bp *schema.Blueprint) {
+    bp.RenameColumn("name", "full_name")
+})
+```
+
+### `bp.DropIndex()`
+
+Drops an index by name.
+
+```go
+func (bp *Blueprint) DropIndex(name string)
+```
+
+```go
+s.Alter("users", func(bp *schema.Blueprint) {
+    bp.DropIndex("idx_users_email")
+})
+```
+
+### `bp.DropForeign()`
+
+Drops a foreign key constraint by name.
+
+```go
+func (bp *Blueprint) DropForeign(name string)
+```
+
+```go
+s.Alter("posts", func(bp *schema.Blueprint) {
+    bp.DropForeign("fk_posts_user_id")
+})
+```
+
 ---
 
 ## Blueprint Methods — Indexes
+
+Index names are generated automatically from the table and column names, so the index methods take only column names. The generated name uses a type prefix: `idx` (regular), `uniq` (unique), `ft` (fulltext), and `sp` (spatial).
 
 ### `bp.Index()`
 
 Creates an index on one or more columns.
 
 ```go
-func (bp *Blueprint) Index(name string, columns ...string)
+func (bp *Blueprint) Index(columns ...string) *IndexDefinition
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `name` | `string` | Index name |
 | `columns` | `...string` | One or more column names |
 
 ```go
 // Single-column index
-bp.Index("idx_users_email", "email")
+bp.Index("email")
 
 // Composite index
-bp.Index("idx_posts_user_status", "user_id", "status")
+bp.Index("user_id", "status")
 ```
 
 ### `bp.UniqueIndex()`
@@ -281,12 +360,36 @@ bp.Index("idx_posts_user_status", "user_id", "status")
 Creates a unique index on one or more columns.
 
 ```go
-func (bp *Blueprint) UniqueIndex(name string, columns ...string)
+func (bp *Blueprint) UniqueIndex(columns ...string) *IndexDefinition
 ```
 
 ```go
-bp.UniqueIndex("idx_users_email_unique", "email")
-bp.UniqueIndex("idx_subscriptions_user_plan", "user_id", "plan_id")
+bp.UniqueIndex("email")
+bp.UniqueIndex("user_id", "plan_id")
+```
+
+### `bp.FulltextIndex()`
+
+Creates a fulltext index on one or more columns.
+
+```go
+func (bp *Blueprint) FulltextIndex(columns ...string) *IndexDefinition
+```
+
+```go
+bp.FulltextIndex("title", "body")
+```
+
+### `bp.SpatialIndex()`
+
+Creates a spatial index on one or more columns.
+
+```go
+func (bp *Blueprint) SpatialIndex(columns ...string) *IndexDefinition
+```
+
+```go
+bp.SpatialIndex("location")
 ```
 
 See [Indexes](/docs/schema-builder/indexes).
@@ -300,7 +403,7 @@ See [Indexes](/docs/schema-builder/indexes).
 Starts a foreign key constraint definition. Returns a chainable builder.
 
 ```go
-func (bp *Blueprint) Foreign(column string) *ForeignKeyBuilder
+func (bp *Blueprint) Foreign(column string) *ForeignKeyDefinition
 ```
 
 **Chain methods:**
@@ -309,13 +412,14 @@ func (bp *Blueprint) Foreign(column string) *ForeignKeyBuilder
 |--------|-----------|-------------|
 | `References` | `.References(column string)` | The referenced column |
 | `On` | `.On(table string)` | The referenced table |
-| `OnDelete` | `.OnDelete(action string)` | Action on parent deletion |
+| `OnDeleteAction` | `.OnDeleteAction(action string)` | Action on parent deletion |
+| `OnUpdateAction` | `.OnUpdateAction(action string)` | Action on parent update |
 
-**OnDelete actions:** `"CASCADE"`, `"SET NULL"`, `"RESTRICT"`, `"NO ACTION"`
+**Actions:** `"CASCADE"`, `"SET NULL"`, `"RESTRICT"`, `"NO ACTION"`
 
 ```go
-bp.Foreign("user_id").References("id").On("users").OnDelete("CASCADE")
-bp.Foreign("category_id").References("id").On("categories").OnDelete("SET NULL")
+bp.Foreign("user_id").References("id").On("users").OnDeleteAction("CASCADE")
+bp.Foreign("category_id").References("id").On("categories").OnDeleteAction("SET NULL").OnUpdateAction("CASCADE")
 ```
 
 See [Foreign Keys](/docs/schema-builder/foreign-keys).
@@ -326,27 +430,27 @@ See [Foreign Keys](/docs/schema-builder/foreign-keys).
 
 Grammars translate Blueprint definitions into database-specific SQL. Three built-in grammars are available.
 
-**Import path:** `github.com/gopackx/go-migration/grammar`
+**Import path:** `github.com/gopackx/go-migration/pkg/schema/grammars`
 
 | Function | Description |
 |----------|-------------|
-| `grammar.PostgreSQL()` | PostgreSQL grammar (default) |
-| `grammar.MySQL()` | MySQL grammar |
-| `grammar.SQLite()` | SQLite grammar |
+| `grammars.NewPostgresGrammar()` | PostgreSQL grammar (default) |
+| `grammars.NewMySQLGrammar()` | MySQL grammar |
+| `grammars.NewSQLiteGrammar()` | SQLite grammar |
 
 Pass a grammar to the migrator using `migrator.WithGrammar()`:
 
 ```go
 import (
-    "github.com/gopackx/go-migration/grammar"
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/schema/grammars"
+    "github.com/gopackx/go-migration/pkg/migrator"
 )
 
 // MySQL
-m := migrator.New(db, migrator.WithGrammar(grammar.MySQL()))
+m := migrator.New(db, migrator.WithGrammar(grammars.NewMySQLGrammar()))
 
 // SQLite
-m := migrator.New(db, migrator.WithGrammar(grammar.SQLite()))
+m := migrator.New(db, migrator.WithGrammar(grammars.NewSQLiteGrammar()))
 ```
 
 See [Database Grammars](/docs/database-grammars) for type mapping details across all three grammars.
@@ -357,14 +461,14 @@ See [Database Grammars](/docs/database-grammars) for type mapping details across
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `Create` | `Create(table, callback)` | Create a new table |
-| `Alter` | `Alter(table, callback)` | Modify an existing table |
-| `Drop` | `Drop(table)` | Drop a table |
-| `DropIfExists` | `DropIfExists(table)` | Drop a table if it exists |
-| `Rename` | `Rename(from, to)` | Rename a table |
-| `HasTable` | `HasTable(table) bool` | Check if a table exists |
-| `HasColumn` | `HasColumn(table, column) bool` | Check if a column exists |
-| `RawExec` | `RawExec(statements...)` | Execute raw SQL statements directly |
+| `Create` | `Create(table, callback) error` | Create a new table |
+| `Alter` | `Alter(table, callback) error` | Modify an existing table |
+| `Drop` | `Drop(table) error` | Drop a table |
+| `DropIfExists` | `DropIfExists(table) error` | Drop a table if it exists |
+| `Rename` | `Rename(from, to) error` | Rename a table |
+| `HasTable` | `HasTable(table) (bool, error)` | Check if a table exists |
+| `HasColumn` | `HasColumn(table, column) (bool, error)` | Check if a column exists |
+| `RawExec` | `RawExec(statements...) error` | Execute raw SQL statements directly |
 
 ## Quick Reference — Blueprint
 
@@ -372,10 +476,13 @@ See [Database Grammars](/docs/database-grammars) for type mapping details across
 |--------|-------------|
 | `ID`, `String`, `Text`, `Integer`, `BigInteger` | Column types |
 | `Boolean`, `Timestamp`, `Date`, `Decimal`, `Float` | Column types |
-| `UUID`, `JSON`, `Binary` | Column types |
-| `.Nullable()`, `.Default()`, `.Primary()` | Column modifiers |
+| `UUID`, `JSON`, `Binary`, `Enum`, `Char` | Column types |
+| `LongText`, `MediumText`, `TinyInt`, `SmallInt` | Column types |
+| `Timestamps()`, `SoftDeletes()` | Convenience column groups |
+| `.Nullable()`, `.Default()`, `.DefaultRaw()`, `.Primary()` | Column modifiers |
 | `.Unique()`, `.Unsigned()`, `.AutoIncrement()` | Column modifiers |
-| `DropColumn(name)` | Remove a column |
-| `Index(name, columns...)` | Create an index |
-| `UniqueIndex(name, columns...)` | Create a unique index |
+| `DropColumn(name)`, `RenameColumn(from, to)` | Alter operations |
+| `DropIndex(name)`, `DropForeign(name)` | Alter operations |
+| `Index(columns...)`, `UniqueIndex(columns...)` | Create an index |
+| `FulltextIndex(columns...)`, `SpatialIndex(columns...)` | Create an index |
 | `Foreign(column)` | Start a foreign key definition |

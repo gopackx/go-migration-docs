@@ -11,10 +11,11 @@ When seeders depend on data from other seeders, you can declare dependencies to 
 
 ## The `DependsOn()` Method
 
-Implement the optional `DependsOn()` method on your seeder to declare which seeders must run first:
+Implement the optional `DependentSeeder` interface on your seeder to declare which seeders must run first:
 
 ```go
-type DependsOnProvider interface {
+type DependentSeeder interface {
+    Seeder
     DependsOn() []string
 }
 ```
@@ -91,11 +92,12 @@ func (s *PostSeeder) DependsOn() []string {
 When you register and run them:
 
 ```go
-runner := seeder.NewRunner(db)
+reg := seeder.NewRegistry()
+_ = reg.Register("PostSeeder", &seeders.PostSeeder{})
+_ = reg.Register("RoleSeeder", &seeders.RoleSeeder{})
+_ = reg.Register("UserSeeder", &seeders.UserSeeder{})
 
-runner.Register("PostSeeder", &seeders.PostSeeder{})
-runner.Register("RoleSeeder", &seeders.RoleSeeder{})
-runner.Register("UserSeeder", &seeders.UserSeeder{})
+runner := seeder.NewRunner(reg, db, nil)
 
 // Despite registration order, the runner resolves dependencies:
 // 1. UserSeeder  (no dependencies)
@@ -146,7 +148,7 @@ The execution order resolves to:
 3. `CommentSeeder` — depends on both `UserSeeder` and `PostSeeder`
 
 <Callout type="warn">
-  Circular dependencies (e.g., A depends on B, B depends on A) will cause an error at runtime. Design your seeders to form a directed acyclic graph (DAG).
+  Circular dependencies (e.g., A depends on B, B depends on A) cause the runner to return an error wrapping `seeder.ErrCircularDependency`, with a description of the offending cycle. Design your seeders to form a directed acyclic graph (DAG).
 </Callout>
 
 ## What's Next?

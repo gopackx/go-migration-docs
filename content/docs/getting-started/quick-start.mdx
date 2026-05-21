@@ -109,8 +109,8 @@ Create a migration file with an `init()` function for auto-registration, plus `U
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/migrator"
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 func init() {
@@ -155,7 +155,7 @@ The `init()` function registers the migration automatically when the package is 
 package main
 
 import (
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     _ "your-project/database/migrations" // blank import triggers init() registration
     _ "your-project/database/seeders"    // blank import triggers seeder init() registration
 )
@@ -187,7 +187,7 @@ import (
 
     _ "github.com/lib/pq" // PostgreSQL driver
 
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     _ "your-project/database/migrations" // blank import triggers init() registration
 )
 
@@ -247,11 +247,10 @@ With `migrator.Run()`, your binary becomes a full CLI tool. All standard command
 
 ```bash
 go run main.go migrate              # Run pending migrations
-go run main.go migrate --seed       # Run pending migrations + seeders
+go run main.go migrate --dry-run    # Preview SQL without applying
 go run main.go migrate:rollback     # Roll back last batch
 go run main.go migrate:fresh        # Drop all tables + re-migrate
 go run main.go migrate:refresh      # Reset + re-migrate
-go run main.go migrate:refresh --seed # Reset + re-migrate + seed
 go run main.go migrate:status       # Show migration status
 go run main.go db:seed              # Run all seeders
 go run main.go db:seed --class=UserSeeder  # Run specific seeder
@@ -260,11 +259,11 @@ go run main.go make:migration create_posts # Scaffold a migration file
 ```
 
 <Callout type="info">
-  `migrator.Run()` uses smart command classification — commands like `version`, `help`, and `make:*` skip database setup entirely, so they work even without a valid database connection.
+  `migrator.Run()` uses smart command classification — commands like `help`, `init`, and `make:*` skip database setup entirely, so they work even without a valid database connection.
 </Callout>
 
 <Callout type="info">
-  New in v1.0.0: The `--seed` flag on `migrate` and `migrate:refresh`, and the `--tag` flag on `db:seed` for running seeders by tag. See the [CLI Reference](/docs/cli) for all available flags.
+  New in v1.0.0: the `--tag` flag on `db:seed` for running seeders by tag, the `--force` flag on `migrate:reset`, the `--dry-run` flag on the migrate commands, and the `db:seed:rollback` and `db:seed:truncate` commands. See the [CLI Reference](/docs/cli) for all available flags.
 </Callout>
 
 ## Using a Different Database
@@ -278,8 +277,8 @@ import (
     "database/sql"
     _ "github.com/go-sql-driver/mysql"
 
-    "github.com/gopackx/go-migration/migrator"
-    "github.com/gopackx/go-migration/schema/grammars"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema/grammars"
     _ "your-project/database/migrations"
 )
 
@@ -300,8 +299,8 @@ import (
     "database/sql"
     _ "github.com/mattn/go-sqlite3"
 
-    "github.com/gopackx/go-migration/migrator"
-    "github.com/gopackx/go-migration/schema/grammars"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema/grammars"
     _ "your-project/database/migrations"
 )
 

@@ -27,13 +27,13 @@ Use the same column methods you'd use in `Create` to add new columns:
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 type AddProfileFieldsToUsers struct{}
 
-func (m *AddProfileFieldsToUsers) Up(s *schema.Builder) {
-    s.Alter("users", func(bp *schema.Blueprint) {
+func (m *AddProfileFieldsToUsers) Up(s *schema.Builder) error {
+    return s.Alter("users", func(bp *schema.Blueprint) {
         bp.String("phone", 20).Nullable()
         bp.Text("bio").Nullable()
         bp.String("avatar_url", 500).Nullable()
@@ -41,8 +41,8 @@ func (m *AddProfileFieldsToUsers) Up(s *schema.Builder) {
     })
 }
 
-func (m *AddProfileFieldsToUsers) Down(s *schema.Builder) {
-    s.Alter("users", func(bp *schema.Blueprint) {
+func (m *AddProfileFieldsToUsers) Down(s *schema.Builder) error {
+    return s.Alter("users", func(bp *schema.Blueprint) {
         bp.DropColumn("phone")
         bp.DropColumn("bio")
         bp.DropColumn("avatar_url")
@@ -75,6 +75,36 @@ s.Alter("users", func(bp *schema.Blueprint) {
   Dropping columns is a destructive operation. Make sure your `Down` method can recreate the column with the correct type and modifiers so rollbacks work properly.
 </Callout>
 
+## Renaming Columns
+
+Use `bp.RenameColumn()` to rename an existing column:
+
+```go
+s.Alter("users", func(bp *schema.Blueprint) {
+    bp.RenameColumn("name", "full_name")
+})
+```
+
+The first argument is the current column name and the second is the new name.
+
+## Dropping Indexes and Foreign Keys
+
+Drop an index by its name with `bp.DropIndex()`, or a foreign key constraint with `bp.DropForeign()`:
+
+```go
+s.Alter("users", func(bp *schema.Blueprint) {
+    bp.DropIndex("idx_users_email")
+})
+
+s.Alter("posts", func(bp *schema.Blueprint) {
+    bp.DropForeign("fk_posts_user_id")
+})
+```
+
+<Callout type="info">
+  Index and foreign key names are generated automatically when they are created. Indexes use a type prefix (`idx`, `uniq`, `ft`, `sp`) followed by the table and column names, and foreign keys follow the `fk_{table}_{column}` pattern.
+</Callout>
+
 ## Adding Indexes and Foreign Keys
 
 You can also add indexes and foreign keys in an `Alter` call:
@@ -82,7 +112,7 @@ You can also add indexes and foreign keys in an `Alter` call:
 ```go
 s.Alter("posts", func(bp *schema.Blueprint) {
     bp.String("category", 100).Nullable()
-    bp.Index("idx_posts_category", "category")
+    bp.Index("category")
 })
 ```
 

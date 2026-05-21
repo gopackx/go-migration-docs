@@ -9,7 +9,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 The factory system generates realistic test data using a generic `Factory[T]` type and a built-in `Faker` for random value generation.
 
-**Import path:** `github.com/gopackx/go-migration/seeder/factory`
+**Import path:** `github.com/gopackx/go-migration/pkg/seeder/factory`
 
 For conceptual documentation, see [Factories](/docs/factories/creating-factories).
 
@@ -32,7 +32,7 @@ func NewFactory[T any](definition func(faker Faker) T) *Factory[T]
 The builder function is called each time you generate an instance, producing unique random values on every call.
 
 ```go
-import "github.com/gopackx/go-migration/seeder/factory"
+import "github.com/gopackx/go-migration/pkg/seeder/factory"
 
 type User struct {
     ID    int
@@ -154,6 +154,62 @@ See [Named States](/docs/factories/named-states).
 
 ---
 
+## `f.WithFaker()`
+
+Returns a new factory copy that uses the provided `Faker` instead of the default time-seeded one. Useful for deterministic, reproducible output.
+
+```go
+func (f *Factory[T]) WithFaker(faker Faker) *Factory[T]
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `faker` | `Faker` | The Faker the returned factory should use |
+
+**Returns:** `*Factory[T]` — a new factory copy (the original is unchanged).
+
+```go
+// Deterministic data: same seed always produces the same values
+seeded := UserFactory.WithFaker(factory.NewFaker(42))
+user := seeded.Make()
+```
+
+---
+
+## Faker Constructors
+
+By default, `NewFactory` seeds a `DefaultFaker` from the current time. To control the random source — for reproducible test data — construct a `Faker` explicitly and pass it via `WithFaker`.
+
+```go
+func NewFaker(seed int64) *DefaultFaker
+func NewFakerWithRand(rng *mathrand.Rand) *DefaultFaker
+```
+
+| Constructor | Description |
+|-------------|-------------|
+| `factory.NewFaker(seed int64)` | Creates a `DefaultFaker` seeded with a fixed value for reproducibility |
+| `factory.NewFakerWithRand(rng *math/rand.Rand)` | Creates a `DefaultFaker` backed by a caller-provided `*math/rand.Rand` |
+
+```go
+import (
+    mathrand "math/rand"
+
+    "github.com/gopackx/go-migration/pkg/seeder/factory"
+)
+
+// Seeded for reproducibility
+f := factory.NewFaker(42)
+
+// Or supply your own rand source
+f2 := factory.NewFakerWithRand(mathrand.New(mathrand.NewSource(1)))
+```
+
+<Callout type="info">
+  `UUID`, `Date`, and `DateBetween` draw from `crypto/rand` when available, so those values stay random even with a fixed seed.
+</Callout>
+
+---
+
 ## Faker Methods
 
 The `factory.Faker` instance is passed to factory builder functions. Each method generates a new random value on every call.
@@ -220,6 +276,9 @@ See [Faker Methods](/docs/factories/faker-methods) for the full reference.
 | Factory | `MakeMany` | `MakeMany(n) []T` | Generate n instances |
 | Factory | `State` | `State(name, builder)` | Register a named state |
 | Factory | `WithState` | `WithState(name) *Factory[T]` | Use a named state |
+| Factory | `WithFaker` | `WithFaker(faker) *Factory[T]` | Use a custom Faker |
+| Faker | `NewFaker` | `NewFaker(seed int64) *DefaultFaker` | Seeded Faker constructor |
+| Faker | `NewFakerWithRand` | `NewFakerWithRand(rng) *DefaultFaker` | Faker from a `*rand.Rand` |
 | Faker | `Name` | `Name() string` | Random full name |
 | Faker | `FirstName` | `FirstName() string` | Random first name |
 | Faker | `LastName` | `LastName() string` | Random last name |

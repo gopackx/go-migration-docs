@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useState } from "react";
 
 const GITHUB_URL = "https://github.com/gopackx/go-migration";
-const GO_GET_CMD = "go get github.com/gopackx/go-migration";
 
 const quickStartSteps = [
   {
@@ -160,34 +158,6 @@ function GithubIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   );
 }
 
-function MiniCopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button
-      onClick={handleCopy}
-      aria-label="Copy code"
-      className="inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white dark:text-zinc-500 dark:hover:bg-black/10 dark:hover:text-zinc-900"
-    >
-      {copied ? (
-        <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-        </svg>
-      )}
-      <span className="font-mono text-[10px] font-semibold">{copied ? "Copied" : "Copy"}</span>
-    </button>
-  );
-}
-
 function FeatureIcon({ name, className = "h-[22px] w-[22px]" }: { name: string; className?: string }) {
   const stroke = {
     xmlns: "http://www.w3.org/2000/svg",
@@ -325,12 +295,12 @@ export default function HomePage() {
 
 type CreateUsers struct{}
 
-func (m *CreateUsers) Up(s *schema.Builder) {
-    s.Create("users", func(t *schema.Table) {
-        t.ID()
-        t.String("email").Unique()
-        t.String("name").Nullable()
-        t.Timestamps()
+func (m *CreateUsers) Up(s *schema.Builder) error {
+    return s.Create("users", func(bp *schema.Blueprint) {
+        bp.ID()
+        bp.String("email", 255).Unique()
+        bp.String("name", 255).Nullable()
+        bp.Timestamps()
     })
 }`}
             </pre>
@@ -551,67 +521,10 @@ func (m *CreateUsers) Up(s *schema.Builder) {
         </div>
       </section>
 
-      {/* === CTA + Footer === */}
-      <section className="border-t border-fd-border">
-        <div className="mx-auto w-full max-w-[1440px] px-5 py-16 md:px-16 md:py-24 lg:px-[120px]">
-          <div className="relative flex flex-col items-center gap-6 overflow-hidden rounded-[28px] bg-gradient-to-br from-[#2DD4BF] via-[#14B8A6] to-[#0D9488] dark:from-[#0F766E] dark:via-[#0D9488] dark:to-[#042F2E] px-6 py-14 text-center shadow-[0_20px_50px_-10px_rgba(20,184,166,0.25),_0_8px_24px_-6px_rgba(13,148,136,0.20),_0_1px_0_rgba(255,255,255,0.25)] dark:shadow-[0_24px_60px_-12px_rgba(13,148,136,0.40),_0_8px_24px_-6px_rgba(0,0,0,0.30),_0_1px_0_rgba(255,255,255,0.12)] md:px-20 md:py-16">
-            <span aria-hidden className="pointer-events-none absolute -left-[120px] -top-[160px] h-[640px] w-[640px] rounded-full bg-[#5EEAD4]/80 blur-[100px] mix-blend-screen dark:-left-[100px] dark:-top-[140px] dark:h-[600px] dark:w-[600px] dark:bg-[#A7F3D0]/50 dark:blur-[80px] dark:mix-blend-normal" />
-            <span aria-hidden className="pointer-events-none absolute left-[520px] top-[80px] h-[760px] w-[760px] rounded-full bg-[#134E4A]/70 blur-[140px] mix-blend-multiply dark:left-[480px] dark:top-[40px] dark:h-[680px] dark:w-[680px] dark:bg-[#5EEAD4]/45 dark:blur-[100px] dark:mix-blend-normal" />
-            <span className="relative inline-flex items-center gap-2 rounded-full bg-white/20 dark:bg-white/[0.12] px-3.5 py-1.5 text-[11px] font-semibold tracking-[0.12em] text-[#0A0A0A] dark:text-white">
-              <span className="h-2 w-2 rounded-full bg-white" />
-              OPEN SOURCE · MIT LICENSE
-            </span>
-            <h2 className="relative max-w-3xl text-[36px] font-bold leading-[1.1] tracking-[-0.02em] text-[#0A0A0A] dark:text-white md:text-[52px]">
-              Ready to ship faster migrations?
-            </h2>
-            <p className="relative max-w-[720px] text-[15px] leading-[1.5] text-[#0A0A0A]/80 dark:text-white/90 md:text-[17px]">
-              Join thousands of Go developers managing their database schemas with confidence. Read the docs, explore examples, or drop a star on GitHub.
-            </p>
-            <div className="relative flex flex-wrap items-center justify-center gap-3">
-              <Link href="/docs" className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 text-[15px] font-semibold text-[#0A0A0A] transition-opacity hover:opacity-95">
-                Read the Docs
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full border border-black/20 bg-white/15 px-6 py-3.5 text-[15px] font-semibold text-[#0A0A0A] backdrop-blur transition-colors hover:bg-white/25 dark:border-white/20 dark:bg-white/[0.12] dark:text-white dark:hover:bg-white/20">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                Star on GitHub
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* === Footer === */}
       <footer className="border-t border-fd-border bg-fd-background">
         <div className="mx-auto w-full max-w-[1440px] px-5 py-12 md:px-16 md:py-16 lg:px-[120px]">
-          <div className="grid gap-10 lg:grid-cols-[1.5fr_2fr]">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2.5">
-                <Image src="/icon-migrator-transparent.png" alt="go-migration" width={28} height={28} />
-                <span className="text-[15px] font-bold text-fd-foreground">go-migration</span>
-              </div>
-              <p className="max-w-md text-[14px] leading-[1.5] text-fd-muted-foreground">
-                Define migrations as structs, build schemas fluently, and seed data with factories.
-              </p>
-              <div className="w-full max-w-[340px] overflow-hidden rounded-[4px] border border-[#1A1A1A] bg-[#0A0A0A] dark:border-[#E4E4E7] dark:bg-[#FAFAFA]">
-                <div className="flex items-center justify-between border-b border-[#1A1A1A] px-2.5 py-1.5 dark:border-[#E4E4E7]">
-                  <div className="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-600">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5">
-                      <polyline points="4 17 10 11 4 5" />
-                      <line x1="12" x2="20" y1="19" y2="19" />
-                    </svg>
-                    <span className="font-mono text-[10px] font-semibold">bash</span>
-                  </div>
-                  <MiniCopyButton text={GO_GET_CMD} />
-                </div>
-                <div className="flex items-center gap-2 px-2.5 py-2 font-mono text-[12px]">
-                  <span className="font-medium text-[#14B8A6]">$</span>
-                  <span className="font-medium text-white dark:text-[#0A0A0A]">{GO_GET_CMD}</span>
-                </div>
-              </div>
-            </div>
+          <div className="grid gap-10">
             <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
               <FooterCol
                 title="PRODUCT"

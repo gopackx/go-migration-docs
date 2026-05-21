@@ -54,8 +54,8 @@ Each file defines a single struct implementing the migration interface, with an 
 package migrations
 
 import (
-    "github.com/gopackx/go-migration/migrator"
-    "github.com/gopackx/go-migration/schema"
+    "github.com/gopackx/go-migration/pkg/migrator"
+    "github.com/gopackx/go-migration/pkg/schema"
 )
 
 func init() {
@@ -86,7 +86,7 @@ With auto-discovery, you don't need a `registry.go` file. Each migration registe
 package main
 
 import (
-    "github.com/gopackx/go-migration/migrator"
+    "github.com/gopackx/go-migration/pkg/migrator"
     _ "your-module/database/migrations"
     _ "your-module/database/seeders"
     _ "github.com/lib/pq" // PostgreSQL driver
@@ -125,7 +125,7 @@ Factories define how to generate test data for your models:
 ```go title="database/factories/user_factory.go"
 package factories
 
-import "github.com/gopackx/go-migration/seeder/factory"
+import "github.com/gopackx/go-migration/pkg/seeder/factory"
 
 type User struct {
     ID    int
