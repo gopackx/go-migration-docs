@@ -55,7 +55,7 @@ See [Quick Start](/docs/getting-started/quick-start) for a complete example.
 </Callout>
 
 <Callout type="info">
-  New in v1.0.0: `Run()` sekarang memuat `migration.json` sebagai file konfigurasi default (sebelumnya `go-migration.yaml`). Secara internal, cobra telah digantikan oleh custom Router menggunakan `map[string]CommandHandler` dan package `flag` dari stdlib. Public API (`migrator.New()`, `migrator.Run()`, `Migration` interface) tidak berubah.
+  New in v1.0.0: `Run()` now loads `migration.json` as the default configuration file (previously `go-migration.yaml`). Internally, cobra has been replaced by a custom Router built on a `map[string]CommandHandler` and the standard library `flag` package. The public API (`migrator.New()`, `migrator.Run()`, the `Migration` interface) is unchanged.
 </Callout>
 
 ---
