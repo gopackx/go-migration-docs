@@ -245,7 +245,7 @@ if err != nil {
 ```
 
 <Callout type="info">
-  `CreateMany` does not wrap all batches in a single transaction. Each batch is an independent `INSERT` statement. If you need all-or-nothing behavior, wrap the call in a transaction yourself.
+  `CreateMany` does not wrap all batches in a single transaction. Each batch is an independent `INSERT` statement. If you need all-or-nothing behavior, wrap the call in a transaction with the [`database.WithTransaction`](/docs/package-reference/connection-manager#databasewithtransaction) helper — it commits on success and rolls back on any error.
 </Callout>
 
 ## Complete Example

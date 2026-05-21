@@ -199,6 +199,39 @@ if err := mgr.Close(); err != nil {
 
 ---
 
+## `database.WithTransaction()`
+
+A package-level helper for running arbitrary work inside a single database transaction. It begins a transaction, calls your function, commits if it returns `nil`, and rolls back if it returns an error (if the commit itself fails, it attempts a rollback and returns a descriptive error).
+
+```go
+func WithTransaction(db *sql.DB, fn TxFunc) error
+
+type TxFunc func(tx *sql.Tx) error
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `db` | `*sql.DB` | The database to open the transaction on |
+| `fn` | `TxFunc` | Function executed within the transaction; receives the `*sql.Tx` |
+
+```go
+import "github.com/gopackx/go-migration/pkg/database"
+
+err := database.WithTransaction(db, func(tx *sql.Tx) error {
+    if _, err := tx.Exec("INSERT INTO users (name) VALUES ($1)", "Alice"); err != nil {
+        return err // rolls back
+    }
+    if _, err := tx.Exec("INSERT INTO profiles (user_id) VALUES (lastval())"); err != nil {
+        return err // rolls back
+    }
+    return nil // commits
+})
+```
+
+This is useful in seeders or any code that needs all-or-nothing behavior across multiple statements. See [Manual Transactions](/docs/migrations/transactions#manual-transactions) for more.
+
+---
+
 ## ConnectionConfig Struct
 
 Configuration for a single database connection.
@@ -319,4 +352,5 @@ func main() {
 | Manager | `Default` | `Default() (*sql.DB, error)` | Get the default connection |
 | Manager | `Connection` | `Connection(name string) (*sql.DB, error)` | Get a connection by name |
 | Manager | `Close` | `Close() error` | Close all connections |
+| Package | `WithTransaction` | `WithTransaction(db *sql.DB, fn TxFunc) error` | Run a function inside a transaction (commit/rollback automatically) |
 | Config | `ConnectionConfig` | struct | Driver, host, credentials, pool settings, and options |

@@ -67,6 +67,18 @@ bp.UUID("id").DefaultRaw("gen_random_uuid()")
   The expression you pass to `DefaultRaw` is database-specific. For example, `gen_random_uuid()` is PostgreSQL-specific. If you target multiple databases, make sure the expression is supported by each one.
 </Callout>
 
+`.DefaultRaw("…")` is shorthand for passing a `schema.Raw(…)` value to `.Default()`. The two are equivalent — use whichever reads better:
+
+```go
+import "github.com/gopackx/go-migration/pkg/schema"
+
+bp.Timestamp("created_at").DefaultRaw("CURRENT_TIMESTAMP")
+// is the same as:
+bp.Timestamp("created_at").Default(schema.Raw("CURRENT_TIMESTAMP"))
+```
+
+`schema.Raw()` returns a `schema.RawExpression`, which the grammar inserts verbatim (unquoted) wherever a default value is expected.
+
 ## Primary
 
 Designate a column as the primary key:

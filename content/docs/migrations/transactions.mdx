@@ -49,7 +49,7 @@ type AddIndexConcurrently struct{}
 func (m *AddIndexConcurrently) Up(s *schema.Builder) error {
     // This runs outside a transaction
     return s.Alter("users", func(bp *schema.Blueprint) {
-        bp.Index("idx_users_email", "email")
+        bp.Index("email")
     })
 }
 
@@ -89,6 +89,29 @@ Common scenarios where you might need to disable transactions:
 - Altering enum types (PostgreSQL)
 - Operations that require implicit commits (MySQL DDL)
 - Long-running data migrations that exceed transaction timeout limits
+
+## Manual Transactions
+
+Migration-level transactions are automatic, but sometimes you need all-or-nothing behavior in code that runs *outside* a migration — for example in a seeder that inserts related rows, or a data backfill. Instead of managing `Begin`/`Commit`/`Rollback` by hand, use the `database.WithTransaction` helper:
+
+```go
+import "github.com/gopackx/go-migration/pkg/database"
+
+err := database.WithTransaction(db, func(tx *sql.Tx) error {
+    if _, err := tx.Exec("INSERT INTO orders (user_id, total) VALUES ($1, $2)", userID, total); err != nil {
+        return err // anything non-nil rolls back the whole transaction
+    }
+    if _, err := tx.Exec("UPDATE users SET order_count = order_count + 1 WHERE id = $1", userID); err != nil {
+        return err
+    }
+    return nil // returning nil commits
+})
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+It begins a transaction, runs your function, **commits** when it returns `nil`, and **rolls back** when it returns an error. If the commit fails, it attempts a rollback and returns a descriptive error. See the [Connection Manager reference](/docs/package-reference/connection-manager#databasewithtransaction) for the full signature.
 
 ## What's Next?
 

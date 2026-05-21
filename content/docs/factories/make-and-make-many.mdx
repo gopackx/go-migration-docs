@@ -115,6 +115,33 @@ func (s *ProductSeeder) Run(db *sql.DB) error {
   `MakeMany` generates all instances in memory before returning. For very large batches, consider generating and inserting in smaller chunks.
 </Callout>
 
+## Deterministic / Seeded Data
+
+By default each factory uses a randomly-seeded faker, so every run produces different values. When you need **reproducible** output — for snapshot tests, fixtures, or stable CI data — give the factory a seeded faker with `WithFaker()`:
+
+```go
+import (
+    "github.com/gopackx/go-migration/pkg/seeder/factory"
+)
+
+// Same seed → same sequence of values on every run
+seeded := factories.UserFactory.WithFaker(factory.NewFaker(42))
+
+user := seeded.Make()         // identical across runs
+users := seeded.MakeMany(10)  // identical batch across runs
+```
+
+| Constructor | Signature | Use case |
+|-------------|-----------|----------|
+| `factory.NewFaker(seed)` | `NewFaker(seed int64) *DefaultFaker` | Reproducible data from a fixed seed |
+| `factory.NewFakerWithRand(rng)` | `NewFakerWithRand(rng *rand.Rand) *DefaultFaker` | Bring your own `*math/rand.Rand` source |
+
+`WithFaker` returns a **copy** of the factory using the supplied faker, so it doesn't affect the original factory or other callers.
+
+<Callout type="info">
+  Seeding the faker controls string and numeric values (`Name`, `Email`, `IntBetween`, etc.). For values backed by `crypto/rand` (like `UUID`), output is not reproducible even with a fixed seed.
+</Callout>
+
 ## What's Next?
 
 - [Creating Factories](/docs/factories/creating-factories) — how to define factories with `factory.NewFactory()`
